@@ -1,0 +1,4290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>San Francisco Schools Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; height: 100vh; overflow: hidden; }
+
+    /* Sidebar */
+    #sidebar { width: 320px; min-width: 320px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; overflow: hidden; }
+    #sidebar-header { padding: 14px 16px; background: #1a73e8; color: white; }
+    #sidebar-header h1 { font-size: 17px; font-weight: 700; }
+    #sidebar-header p { font-size: 11px; opacity: 0.85; margin-top: 3px; }
+
+    #controls { padding: 10px 12px; border-bottom: 1px solid #eee; background: #fafafa; }
+    #search-wrap { position: relative; margin-bottom: 9px; }
+    #search { width: 100%; padding: 7px 30px 7px 11px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; outline: none; box-sizing: border-box; }
+    #search:focus { border-color: #1a73e8; }
+    #search-clear { display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #aaa; font-size: 16px; line-height: 1; padding: 0; }
+    #search-clear:hover { color: #555; }
+
+    .filter-row { display: flex; align-items: center; margin-bottom: 7px; }
+    .filter-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.4px; width: 48px; flex-shrink: 0; }
+    .filter-buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+    .filter-btn { padding: 3px 9px; border: 1px solid #ddd; border-radius: 12px; font-size: 11px; cursor: pointer; background: white; color: #555; transition: all 0.15s; }
+    .filter-btn.active { color: white; border-color: transparent; }
+    .filter-btn.active[data-value="all"] { background: #1a73e8; }
+    .filter-btn.active[data-value="public"] { background: #2e7d32; }
+    .filter-btn.active[data-value="charter"] { background: #e65100; }
+    .filter-btn.active[data-value="private"] { background: #ad1457; }
+    .filter-btn.active[data-value="independent"] { background: #ad1457; }
+    .filter-btn.active[data-value="parochial"] { background: #4a148c; }
+    #toggle-boundaries.on { background: #0277bd; color: white; border-color: transparent; }
+    .boundary-tooltip { background: rgba(255,255,255,0.92); border: 1px solid #ccc; border-radius: 4px; font-size: 11px; font-weight: 600; color: #333; padding: 3px 7px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); pointer-events: none; }
+    .leaflet-interactive:focus { outline: none; }
+    #toggle-feeders.on { background: #6a1b9a; color: white; border-color: transparent; }
+    #toggle-ms-feeders.on { background: #e65100; color: white; border-color: transparent; }
+    .filter-btn[data-filter="program"].active[data-value="spanish-immersion"] { background: #c0392b; color: white; border-color: transparent; }
+    .filter-btn[data-filter="program"].active[data-value="cantonese-immersion"] { background: #e67e22; color: white; border-color: transparent; }
+    .filter-btn[data-filter="program"].active[data-value="mandarin-immersion"] { background: #d35400; color: white; border-color: transparent; }
+    .filter-btn[data-filter="program"].active[data-value="korean-immersion"] { background: #16a085; color: white; border-color: transparent; }
+    .filter-btn[data-filter="program"].active[data-value="japanese"] { background: #8e44ad; color: white; border-color: transparent; }
+    .filter-btn[data-filter="program"].active[data-value="french-immersion"] { background: #1565c0; color: white; border-color: transparent; }
+    .filter-btn[data-filter="program"].active[data-value="italian-immersion"] { background: #b71c1c; color: white; border-color: transparent; }
+    .filter-btn[data-filter="program"].active[data-value="german-immersion"] { background: #4e342e; color: white; border-color: transparent; }
+    .filter-btn[data-filter="program"].active[data-value="arts"] { background: #2980b9; color: white; border-color: transparent; }
+    .filter-btn[data-filter="program"].active[data-value="montessori"] { background: #27ae60; color: white; border-color: transparent; }
+    .filter-btn[data-filter="program"].active[data-value="all"] { background: #1a73e8; color: white; border-color: transparent; }
+    .filter-btn[data-filter="rating"].active { background: var(--rc, #1a73e8); color: white; border-color: transparent; }
+    .filter-btn[data-filter="rating"].active[data-value="all"] { background: #1a73e8; }
+    .filter-btn.active[data-value="elementary"] { background: #2e7d32; }
+    .filter-btn.active[data-value="middle"] { background: #e65100; }
+    .filter-btn.active[data-value="high"] { background: #c62828; }
+    .filter-btn.active[data-value="k8"] { background: #00838f; }
+    .filter-btn.active[data-value="preschool"] { background: #6a1b9a; }
+    .filter-btn.active[data-value="tuition"] { background: #1565c0; }
+    .filter-btn.active[data-value="free"] { background: #2e7d32; }
+
+    #count-bar { padding: 5px 12px; font-size: 11px; color: #777; background: #f0f4ff; border-bottom: 1px solid #e0e8ff; }
+
+    #school-list { overflow-y: auto; flex: 1; }
+    .school-item { padding: 9px 12px; border-bottom: 1px solid #f2f2f2; cursor: pointer; transition: background 0.1s; }
+    .school-item:hover { background: #f5f8ff; }
+    .school-item.selected { background: #e8f0fe; border-left: 3px solid #1a73e8; }
+    .school-name { font-size: 12.5px; font-weight: 600; color: #202124; line-height: 1.3; }
+    .school-meta { font-size: 11px; color: #888; margin-top: 2px; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+    /* Map */
+    #map { flex: 1; }
+
+    /* Popup */
+    .popup-name { font-weight: 700; font-size: 13px; margin-bottom: 3px; }
+    .popup-address { font-size: 11px; color: #666; margin-bottom: 6px; }
+    .popup-row { font-size: 11px; margin-bottom: 2px; }
+    .popup-row span { font-weight: 600; }
+    .popup-link { display: inline-block; margin-top: 6px; font-size: 11px; color: #1a73e8; text-decoration: none; }
+    .popup-link:hover { text-decoration: underline; }
+
+    /* Tuition range slider */
+    .tuition-slider-wrap { position: relative; width: 100%; height: 20px; margin: 4px 0 2px; }
+    .tuition-track { position: absolute; top: 8px; left: 0; right: 0; height: 4px; background: #ddd; border-radius: 2px; }
+    .tuition-fill { position: absolute; height: 4px; background: #1a73e8; border-radius: 2px; }
+    .tuition-slider-wrap input[type=range] {
+      position: absolute; width: 100%; top: 0; height: 20px;
+      background: none; pointer-events: none; appearance: none; -webkit-appearance: none; margin: 0; padding: 0;
+    }
+    .tuition-slider-wrap input[type=range]::-webkit-slider-thumb {
+      pointer-events: all; -webkit-appearance: none; appearance: none;
+      width: 16px; height: 16px; border-radius: 50%; background: #1a73e8;
+      cursor: pointer; border: 2.5px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .tuition-slider-wrap input[type=range]::-moz-range-thumb {
+      pointer-events: all; width: 14px; height: 14px; border-radius: 50%; background: #1a73e8;
+      cursor: pointer; border: 2.5px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .tuition-labels { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: #1a73e8; margin-top: 2px; }
+
+    /* Near Me */
+    #radius-address { flex: 1; padding: 5px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; outline: none; min-width: 0; }
+    #radius-address:focus { border-color: #1a73e8; }
+    #radius-go { padding: 5px 10px; background: #1a73e8; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    #radius-go:hover { background: #1557b0; }
+    #radius-go:disabled { background: #aaa; cursor: default; }
+    .radius-btn { padding: 3px 9px; border: 1px solid #ddd; border-radius: 12px; font-size: 11px; cursor: pointer; background: white; color: #555; transition: all 0.15s; }
+    .radius-btn.active { background: #1a73e8; color: white; border-color: transparent; }
+    #radius-clear { color: #c62828; }
+    #radius-status { font-size: 10px; color: #888; line-height: 1.4; }
+
+    /* Legend */
+    #legend { position: absolute; bottom: 28px; right: 8px; z-index: 1000; background: white; padding: 10px 13px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.18); font-size: 11px; line-height: 1.6; }
+    #legend b { display: block; font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 5px; margin-bottom: 1px; }
+    #legend b:first-child { margin-top: 0; }
+    .leg { display: flex; align-items: center; }
+    .leg-dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; border: 1.5px solid rgba(0,0,0,0.15); }
+  </style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h1>San Francisco Schools</h1>
+    <p>Public, Charter &amp; Private Schools · San Francisco</p>
+  </div>
+  <div id="controls">
+    <div id="search-wrap">
+      <input type="text" id="search" placeholder="Search by name or address…">
+      <button id="search-clear" title="Clear search">&#x2715;</button>
+    </div>
+    <div class="filter-row">
+      <div class="filter-label">Type</div>
+      <div class="filter-buttons">
+        <button class="filter-btn active" data-filter="type" data-value="all">All</button>
+        <button class="filter-btn" data-filter="type" data-value="public">Public</button>
+        <button class="filter-btn" data-filter="type" data-value="charter">Charter</button>
+        <button class="filter-btn" data-filter="type" data-value="private">Private (all)</button>
+        <button class="filter-btn" data-filter="type" data-value="independent">Independent</button>
+        <button class="filter-btn" data-filter="type" data-value="parochial">Parochial</button>
+      </div>
+    </div>
+    <div class="filter-row">
+      <div class="filter-label">Level</div>
+      <div class="filter-buttons">
+        <button class="filter-btn active" data-filter="level" data-value="all">All</button>
+        <button class="filter-btn" data-filter="level" data-value="preschool">Pre-K</button>
+        <button class="filter-btn" data-filter="level" data-value="elementary">Elementary</button>
+        <button class="filter-btn" data-filter="level" data-value="k8">K–8</button>
+        <button class="filter-btn" data-filter="level" data-value="middle">Middle</button>
+        <button class="filter-btn" data-filter="level" data-value="high">High</button>
+      </div>
+    </div>
+    <div class="filter-row">
+      <div class="filter-label">Pre-K</div>
+      <div class="filter-buttons">
+        <button class="filter-btn active" data-filter="prek" data-value="all">All</button>
+        <button class="filter-btn" data-filter="prek" data-value="tuition">Tuition-based</button>
+        <button class="filter-btn" data-filter="prek" data-value="free">Income-restricted</button>
+      </div>
+    </div>
+    <div class="filter-row">
+      <div class="filter-label">Rating</div>
+      <div class="filter-buttons">
+        <button class="filter-btn active" data-filter="rating" data-value="all">All</button>
+        <button class="filter-btn" data-filter="rating" data-value="5" style="--rc:#1565c0">Blue</button>
+        <button class="filter-btn" data-filter="rating" data-value="4" style="--rc:#2e7d32">Green</button>
+        <button class="filter-btn" data-filter="rating" data-value="3" style="--rc:#f9a825">Yellow</button>
+        <button class="filter-btn" data-filter="rating" data-value="2" style="--rc:#e65100">Orange</button>
+        <button class="filter-btn" data-filter="rating" data-value="1" style="--rc:#c62828">Red</button>
+      </div>
+    </div>
+    <div class="filter-row" style="padding-bottom:2px">
+      <div class="filter-label" style="font-size:9px;color:#aaa;width:auto">CA Dashboard · public &amp; charter only · multiselect</div>
+    </div>
+    <div class="filter-row" style="flex-direction:column;align-items:flex-start;gap:2px">
+      <div style="display:flex;justify-content:space-between;width:100%;align-items:center">
+        <div class="filter-label">Tuition</div>
+        <div style="font-size:9px;color:#aaa">private schools · SF Chronicle 2025</div>
+      </div>
+      <div style="width:100%">
+        <div class="tuition-slider-wrap">
+          <div class="tuition-track"><div class="tuition-fill" id="tuition-fill"></div></div>
+          <input type="range" id="tuition-min" min="0" max="80000" step="1000" value="0">
+          <input type="range" id="tuition-max" min="0" max="80000" step="1000" value="80000">
+        </div>
+        <div class="tuition-labels">
+          <span id="tuition-min-label">$0</span>
+          <span id="tuition-max-label">$80K+</span>
+        </div>
+      </div>
+    </div>
+    <div class="filter-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+      <div class="filter-label" style="width:auto">Language Immersion Program</div>
+      <div class="filter-buttons">
+        <button class="filter-btn active" data-filter="program" data-value="all">All</button>
+        <button class="filter-btn" data-filter="program" data-value="spanish-immersion">Spanish</button>
+        <button class="filter-btn" data-filter="program" data-value="cantonese-immersion">Cantonese</button>
+        <button class="filter-btn" data-filter="program" data-value="mandarin-immersion">Mandarin</button>
+        <button class="filter-btn" data-filter="program" data-value="korean-immersion">Korean</button>
+        <button class="filter-btn" data-filter="program" data-value="japanese">Japanese</button>
+        <button class="filter-btn" data-filter="program" data-value="french-immersion">French</button>
+        <button class="filter-btn" data-filter="program" data-value="italian-immersion">Italian</button>
+        <button class="filter-btn" data-filter="program" data-value="german-immersion">German</button>
+        <button class="filter-btn" data-filter="program" data-value="arts">Arts</button>
+        <button class="filter-btn" data-filter="program" data-value="montessori">Montessori</button>
+      </div>
+    </div>
+    <div class="filter-row">
+      <div class="filter-label">Layers</div>
+      <div class="filter-buttons">
+        <button id="toggle-boundaries" class="filter-btn" onclick="toggleBoundaries()">
+          Show Attendance Areas
+        </button>
+        <button id="toggle-feeders" class="filter-btn" onclick="toggleFeeders()">
+          Show TK Feeder Arrows
+        </button>
+        <button id="toggle-ms-feeders" class="filter-btn" onclick="toggleMSFeeders()">
+          Show ES→MS Arrows
+        </button>
+      </div>
+    </div>
+    <div class="filter-row" style="align-items:flex-start">
+      <div class="filter-label" style="padding-top:5px;width:58px">Near Me</div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+        <div style="display:flex;gap:4px">
+          <input type="text" id="radius-address" placeholder="Your address in SF…">
+          <button id="radius-go">Go</button>
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+          <button class="radius-btn active" data-miles="0.5">0.5 mi</button>
+          <button class="radius-btn" data-miles="1">1 mi</button>
+          <button class="radius-btn" data-miles="2">2 mi</button>
+          <button class="radius-btn" data-miles="5">5 mi</button>
+          <button id="radius-clear" class="radius-btn" style="display:none">Clear</button>
+        </div>
+        <div id="radius-status"></div>
+      </div>
+    </div>
+  </div>
+  <div id="count-bar">Loading…</div>
+  <div id="school-list"></div>
+</div>
+
+<div id="map"></div>
+
+<div id="legend">
+  <b>Level (color)</b>
+  <div class="leg"><div class="leg-dot" style="background:#6a1b9a"></div> Preschool / Pre-K</div>
+  <div class="leg"><div class="leg-dot" style="background:#2e7d32"></div> Elementary (K–5/6)</div>
+  <div class="leg"><div class="leg-dot" style="background:#00838f"></div> K–8</div>
+  <div class="leg"><div class="leg-dot" style="background:#e65100"></div> Middle School</div>
+  <div class="leg"><div class="leg-dot" style="background:#c62828"></div> High School</div>
+  <div class="leg"><div class="leg-dot" style="background:#555"></div> K–12 / Other</div>
+  <b>Type (shape)</b>
+  <div class="leg"><div class="leg-dot" style="background:#888;border-radius:50%"></div> Public SFUSD</div>
+  <div class="leg"><div class="leg-dot" style="background:#888;border-radius:2px;transform:rotate(45deg)"></div>&nbsp;&nbsp;Charter</div>
+  <div class="leg"><div style="width:11px;height:11px;background:#888;border-radius:2px;margin-right:5px;flex-shrink:0"></div> Private – Independent</div>
+  <div class="leg"><div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:11px solid #888;margin-right:5px;flex-shrink:0"></div> Private – Parochial</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const privateSchools = [
+  {
+    "name": "Meadows-Livingstone School",
+    "address": "1499 Potrero Ave Ste. 1, San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-6",
+    "lat": 37.749667,
+    "lng": -122.404827,
+    "website": "https://www.meadowslivingstoneschool.com"
+  },
+  {
+    "name": "Adda Clevenger School",
+    "address": "180 Fair Oaks St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "prek": true,
+    "lat": 37.75368,
+    "lng": -122.424159,
+    "website": "www.addaclevenger.org"
+  },
+  {
+    "name": "Aloha Micro Academy",
+    "address": "166 Geary Str Ste 1500 #1532, San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "K-12",
+    "lat": 37.787767,
+    "lng": -122.40612,
+    "website": "www.alohamicroacademy.org"
+  },
+  {
+    "name": "Alpha School San Francisco",
+    "address": "3741 Buchanan St, San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.80457,
+    "lng": -122.433941,
+    "website": "https://alpha.school/san-francisco/"
+  },
+  {
+    "name": "Alta Vista School",
+    "address": "450 Somerset St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.725947,
+    "lng": -122.40731,
+    "website": "www.altavistaschool.org"
+  },
+  {
+    "name": "Archbishop Riordan High School",
+    "address": "175 Frida Kahlo Way, San Francisco, CA",
+    "type": "parochial",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.728235,
+    "lng": -122.453418,
+    "website": "www.riordanhs.org"
+  },
+  {
+    "name": "Arise Educational Center",
+    "address": "1760 Cesar Chavez St., Ste. Rs, San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "K-12",
+    "lat": 37.750495,
+    "lng": -122.394874,
+    "website": "www.ariseeducationalcenter.com"
+  },
+  {
+    "name": "Bais Menacham Yeshiva Day School",
+    "address": "834 28th Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.773614,
+    "lng": -122.487198,
+    "website": "www.bmyds.org"
+  },
+  {
+    "name": "Bertrand D Hsu American & Chinese Bicultural Academy",
+    "address": "455 Arkansas St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.760533,
+    "lng": -122.398021,
+    "website": "www.berthsuacademy.org",
+    "programs": ["mandarin-immersion"]
+  },
+  {
+    "name": "Bloomington Pre-University Education",
+    "address": "166 Geary Str Ste 1500, San Francisco, CA",
+    "type": "independent",
+    "level": "high",
+    "grades": "K-12",
+    "lat": 37.787767,
+    "lng": -122.40612,
+    "website": "http://www.bu.edu.cw"
+  },
+  {
+    "name": "Brightworks School",
+    "address": "682 Schofield Rd, San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-12",
+    "lat": 37.800303,
+    "lng": -122.468741,
+    "website": "sfbrightworks.org"
+  },
+  {
+    "name": "Brilliant Microschool",
+    "address": "859 Scott St., San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "1-12",
+    "lat": 37.777794,
+    "lng": -122.436875,
+    "website": "Brilliantgrades.com"
+  },
+  {
+    "name": "Cathedral School for Boys",
+    "address": "1275 Sacramento St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.792394,
+    "lng": -122.413896,
+    "website": "https://www.cathedralschool.net/"
+  },
+  {
+    "name": "Children's Day School",
+    "address": "333 Dolores St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "prek": true,
+    "lat": 37.763988,
+    "lng": -122.425053,
+    "website": "www.cds-sf.org"
+  },
+  {
+    "name": "Chinese American International School- 19th Ave Campus",
+    "address": "3250 19Th Ave, San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "PreK-8",
+    "prek": true,
+    "lat": 37.729205,
+    "lng": -122.47388,
+    "website": "www.cais.org",
+    "notes": "Offers preschool · Mandarin immersion",
+    "programs": ["mandarin-immersion"]
+  },
+  {
+    "name": "Convent & Stuart Hall, Schools of the Sacred Heart - San Francisco",
+    "address": "2222 BRd.way St, San Francisco, CA",
+    "type": "parochial",
+    "level": "k12",
+    "grades": "K-12",
+    "lat": 37.794657,
+    "lng": -122.434294,
+    "website": "https://www.sacredsf.org"
+  },
+  {
+    "name": "Cornerstone Academy-Silver Campus",
+    "address": "801 Silver Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "K-3",
+    "lat": 37.729063,
+    "lng": -122.419485,
+    "website": "www.cornerstone-academy.net"
+  },
+  {
+    "name": "Cornerstone Academy\u2013Cambridge Campus",
+    "address": "501 Cambridge St., San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "4-8",
+    "lat": 37.724604,
+    "lng": -122.417563,
+    "website": "www.cornerstone-academy.net"
+  },
+  {
+    "name": "De Marillac Academy",
+    "address": "175 Golden Gate Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "4-8",
+    "lat": 37.781659,
+    "lng": -122.413344,
+    "website": "www.demarillac.org"
+  },
+  {
+    "name": "Donum Dei Classical Academy",
+    "address": "1550 Treat Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.745905,
+    "lng": -122.412703,
+    "website": "https://www.donumdei.org/"
+  },
+  {
+    "name": "Drew School",
+    "address": "2901 California St., San Francisco, CA",
+    "type": "independent",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.787687,
+    "lng": -122.44253,
+    "website": "https://www.drewschool.org"
+  },
+  {
+    "name": "Eclipse Academy",
+    "address": "862 Shotwell St., San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "3-12",
+    "lat": 37.754645,
+    "lng": -122.415624,
+    "website": "https://www.eclipseacademy.com/"
+  },
+  {
+    "name": "Ecole Notre Dame Des Victoires",
+    "address": "659 Pine St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "prek": true,
+    "lat": 37.791311,
+    "lng": -122.406709,
+    "website": "www.ndvsf.org"
+  },
+  {
+    "name": "Edgewood Community School",
+    "address": "1801 Vicente St., San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "9-12",
+    "lat": 37.738609,
+    "lng": -122.486047,
+    "website": "www.edgewood.org"
+  },
+  {
+    "name": "Enlighten Academy",
+    "address": "166 Geary St. Ste. 1500, San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "6-12",
+    "lat": 37.787767,
+    "lng": -122.40612,
+    "website": null
+  },
+  {
+    "name": "Eureka Learning Center",
+    "address": "464 Diamond St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-K",
+    "prek": true,
+    "lat": 37.754966,
+    "lng": -122.437008,
+    "website": "www.eurekalearningcenter.com"
+  },
+  {
+    "name": "Fusion Academy San Francisco",
+    "address": "1160 Battery St. Ste. 40, San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "6-12",
+    "lat": 37.801789,
+    "lng": -122.401438,
+    "website": "https://www.fusionacademy.com/campuses/san-francisco/"
+  },
+  {
+    "name": "German International School of Silicon Valley",
+    "address": "117 Diamond St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-12",
+    "lat": 37.760246,
+    "lng": -122.436904,
+    "website": "gissv.org",
+    "programs": ["german-immersion"]
+  },
+  {
+    "name": "Hillwood Academic Day",
+    "address": "2521 Scott St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.793323,
+    "lng": -122.440119,
+    "website": "hillwoodschool.com"
+  },
+  {
+    "name": "Holy Name Elementary",
+    "address": "1560 40th Ave., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.757809,
+    "lng": -122.498388,
+    "website": "www.holynamesf.com"
+  },
+  {
+    "name": "ICA Cristo Rey Academy",
+    "address": "3625 24th St., San Francisco, CA",
+    "type": "independent",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.751858,
+    "lng": -122.423527,
+    "website": "https://www.icacristorey.org/"
+  },
+  {
+    "name": "Jewish Community High School of the Bay",
+    "address": "1835 Ellis St., San Francisco, CA",
+    "type": "parochial",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.781426,
+    "lng": -122.436417,
+    "website": "www.jchsofthebay.org"
+  },
+  {
+    "name": "Kahlon Family Services School",
+    "address": "3140 Balboa St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.776063,
+    "lng": -122.492742,
+    "website": "https://www.kfsschool.org/"
+  },
+  {
+    "name": "Katherine Delmar Burke School",
+    "address": "7070 California St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.783557,
+    "lng": -122.492867,
+    "website": "www.burkes.org"
+  },
+  {
+    "name": "Katherine Michiels School",
+    "address": "1335 Guerrero St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.749812,
+    "lng": -122.422421,
+    "website": "www.kmsofsf.org"
+  },
+  {
+    "name": "Kittredge School",
+    "address": "2355 Lake St, San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.785544,
+    "lng": -122.484956,
+    "website": "www.kittredge.org"
+  },
+  {
+    "name": "KZV Armenian School",
+    "address": "825 Brotherhood Way, San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.713841,
+    "lng": -122.478318,
+    "website": "www.kzv.org"
+  },
+  {
+    "name": "La Scuola International School",
+    "address": "3250 18Th St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "prek": true,
+    "lat": 37.762291,
+    "lng": -122.416331,
+    "website": "lascuolasf.org",
+    "programs": ["italian-immersion"]
+  },
+  {
+    "name": "Lakeside Presbyterian Center for Children",
+    "address": "201 Eucalyptus Dr, San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-K",
+    "lat": 37.730728,
+    "lng": -122.475199,
+    "website": "http://www.lakesidechildrencenter.org"
+  },
+  {
+    "name": "Lavenia Rochelle Academy",
+    "address": "724 Kirkwood Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "K-12",
+    "lat": 37.729029,
+    "lng": -122.373248,
+    "website": null
+  },
+  {
+    "name": "Lick-Wilmerding High School",
+    "address": "755 Ocean Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.722188,
+    "lng": -122.449131,
+    "website": "www.lwhs.org"
+  },
+  {
+    "name": "Live Oak School",
+    "address": "1555 Mariposa St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.7636,
+    "lng": -122.399525,
+    "website": null
+  },
+  {
+    "name": "Lycee Francais de San Francisco (Ashbury)",
+    "address": "755 Ashbury St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "lat": 37.768064,
+    "lng": -122.446841,
+    "website": "https://www.lelycee.org/",
+    "programs": ["french-immersion"]
+  },
+  {
+    "name": "Lycee Francais de San Francisco (Ortega)",
+    "address": "1201 Ortega St., San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "6-12",
+    "lat": 37.751894,
+    "lng": -122.476479,
+    "website": "https://www.lelycee.org/",
+    "programs": ["french-immersion"]
+  },
+  {
+    "name": "Millennium School of San Francisco",
+    "address": "888 Turk St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "6-8",
+    "lat": 37.781751,
+    "lng": -122.423746,
+    "website": "millenniumschool.org"
+  },
+  {
+    "name": "Mission Dolores Academy",
+    "address": "3371 16th St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.764531,
+    "lng": -122.428026,
+    "website": "www.mdasf.org"
+  },
+  {
+    "name": "Mission Montessori",
+    "address": "50 Fell St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-6",
+    "lat": 37.77682,
+    "lng": -122.418721,
+    "website": "missionmontessori.org"
+  },
+  {
+    "name": "My City School",
+    "address": "855 27th Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "5-8",
+    "lat": 37.77356,
+    "lng": -122.486902,
+    "website": "https://www.mycityschool.org"
+  },
+  {
+    "name": "Nativity",
+    "address": "350 9Th Ave, San Francisco, CA",
+    "type": "independent",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.781921,
+    "lng": -122.46732,
+    "website": "https://www.nativityhs.org/"
+  },
+  {
+    "name": "Nomad",
+    "address": "2590 Folsom St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "5-8",
+    "lat": 37.755849,
+    "lng": -122.414721,
+    "website": null
+  },
+  {
+    "name": "Our Lady of the Visitacion Elementary",
+    "address": "785 Sunnydale Ave, San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.709685,
+    "lng": -122.409473,
+    "website": "www.olvsf.org"
+  },
+  {
+    "name": "Presidio Hill School",
+    "address": "3839 Washington St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "prek": true,
+    "lat": 37.788675,
+    "lng": -122.456047,
+    "website": "www.presidiohill.org"
+  },
+  {
+    "name": "Presidio Knolls School",
+    "address": "250 10th St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "PreK-8",
+    "prek": true,
+    "lat": 37.773697,
+    "lng": -122.413682,
+    "website": "www.presidioknolls.org",
+    "notes": "Offers preschool",
+    "programs": ["mandarin-immersion"]
+  },
+  {
+    "name": "Proof School",
+    "address": "973 Mission St, San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "6-12",
+    "lat": 37.781181,
+    "lng": -122.407924,
+    "website": "www.proofschool.org"
+  },
+  {
+    "name": "Red Bridge",
+    "address": "2265 Third St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-7",
+    "lat": 37.761089,
+    "lng": -122.388277,
+    "website": "https://www.redbridgesf.org/"
+  },
+  {
+    "name": "Rise University Preparatory",
+    "address": "1224 Fairfax Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.738923,
+    "lng": -122.382079,
+    "website": "www.riseprep.org"
+  },
+  {
+    "name": "Sacred Heart Cathedral Preparatory",
+    "address": "1055 Ellis St., San Francisco, CA",
+    "type": "parochial",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.783524,
+    "lng": -122.423457,
+    "website": "www.shcp.edu"
+  },
+  {
+    "name": "Saint Brigid Academy",
+    "address": "2250 Franklin St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.795337,
+    "lng": -122.424826,
+    "website": "https://www.saintbrigidsf.org/"
+  },
+  {
+    "name": "Saint Monica School",
+    "address": "5950 Geary Blvd., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.780236,
+    "lng": -122.483524,
+    "website": "www.stmonicasf.org"
+  },
+  {
+    "name": "San Francisco Adventist School",
+    "address": "66 Geneva Ave., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.722215,
+    "lng": -122.450839,
+    "website": "https://www.sfasonline.org/"
+  },
+  {
+    "name": "San Francisco Christian School",
+    "address": "25 Whittier St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k12",
+    "grades": "K-12",
+    "lat": 37.710037,
+    "lng": -122.447754,
+    "website": "www.sfchristianschool.org"
+  },
+  {
+    "name": "San Francisco City Academy",
+    "address": "230 Jones St., San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "K-5",
+    "lat": 37.783496,
+    "lng": -122.412406,
+    "website": "sfcityacademy.com"
+  },
+  {
+    "name": "San Francisco Day School",
+    "address": "2160 Golden Gate Ave, San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.777894,
+    "lng": -122.446137,
+    "website": "www.sfday.org"
+  },
+  {
+    "name": "San Francisco Friends School",
+    "address": "250 Valencia St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.768979,
+    "lng": -122.422908,
+    "website": "sffriendsschool.org"
+  },
+  {
+    "name": "San Francisco High School of the Arts",
+    "address": "1950 Page St., San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "5-12",
+    "lat": 37.770342,
+    "lng": -122.452939,
+    "website": "https://www.highschoolofthearts.org/"
+  },
+  {
+    "name": "San Francisco Islamic School",
+    "address": "55 Farallones Ave, San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.71375,
+    "lng": -122.454287,
+    "website": "www.sfislamicschool.org"
+  },
+  {
+    "name": "San Francisco Pacific Academy",
+    "address": "3301 Balboa St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.77564,
+    "lng": -122.494287,
+    "website": "https://sfpacificacademy.org/"
+  },
+  {
+    "name": "San Francisco School, The",
+    "address": "300 Gaven St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "prek": true,
+    "lat": 37.73278,
+    "lng": -122.411698,
+    "website": "www.sfschool.org"
+  },
+  {
+    "name": "San Francisco Schoolhouse",
+    "address": "735 Fell St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.77487,
+    "lng": -122.430191,
+    "website": "Sfschoolhouse.org"
+  },
+  {
+    "name": "San Francisco University High School",
+    "address": "3065 Jackson St, San Francisco, CA",
+    "type": "independent",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.790956,
+    "lng": -122.445353,
+    "website": "sfuhs.org"
+  },
+  {
+    "name": "San Francisco Waldorf School",
+    "address": "2938 Washington St, San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "K-12",
+    "prek": true,
+    "lat": 37.79092,
+    "lng": -122.44191,
+    "website": "www.sfwaldorf.org"
+  },
+  {
+    "name": "School of the Epiphany",
+    "address": "600 Italy Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.716192,
+    "lng": -122.434907,
+    "website": "sfepiphany.org"
+  },
+  {
+    "name": "St James School",
+    "address": "321 Fair Oaks St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.751345,
+    "lng": -122.423676,
+    "website": "www.saintjames.org"
+  },
+  {
+    "name": "St. Anne School",
+    "address": "1320 14th Ave., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.763304,
+    "lng": -122.471509,
+    "website": "www.stanne.com"
+  },
+  {
+    "name": "St. Anthony\u2013Immaculate Conception",
+    "address": "299 Precita Ave., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.747329,
+    "lng": -122.413856,
+    "website": "www.saicsf.org"
+  },
+  {
+    "name": "St. Brendan Elementary",
+    "address": "940 Laguna Honda Blvd., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.742801,
+    "lng": -122.456493,
+    "website": "stbrendansf.com"
+  },
+  {
+    "name": "St. Cecilia Elementary",
+    "address": "660 Vicente St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "prek": true,
+    "lat": 37.739403,
+    "lng": -122.473942,
+    "website": "www.stceciliaschool.org"
+  },
+  {
+    "name": "St. Finn Barr Catholic School",
+    "address": "419 Hearst Ave., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.730349,
+    "lng": -122.447365,
+    "website": "www.stfinnbarr.org"
+  },
+  {
+    "name": "St. Gabriel Elementary School",
+    "address": "2550 41st Ave., San Francisco, CA",
+    "type": "parochial",
+    "level": "elementary",
+    "grades": "K-9",
+    "lat": 37.739373,
+    "lng": -122.498992,
+    "website": "stgabrielsf.com"
+  },
+  {
+    "name": "St. Ignatius College Preparatory",
+    "address": "2001 37th Ave., San Francisco, CA",
+    "type": "parochial",
+    "level": "high",
+    "grades": "6-12",
+    "lat": 37.7484,
+    "lng": -122.495771,
+    "website": "www.siprep.org"
+  },
+  {
+    "name": "St. John the Evangelist",
+    "address": "925 Chenery St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.735227,
+    "lng": -122.437712,
+    "website": "https://stjohnseagles.com/"
+  },
+  {
+    "name": "St. Paul's",
+    "address": "1690 Church St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.744051,
+    "lng": -122.426868,
+    "website": "www.stpaulschoolsf.org"
+  },
+  {
+    "name": "St. Peter's School",
+    "address": "1266 Florida St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.751672,
+    "lng": -122.409996,
+    "website": "www.stpeterssf.org"
+  },
+  {
+    "name": "St. Philip School",
+    "address": "665 Elizabeth St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.751866,
+    "lng": -122.436301,
+    "website": "www.saintphilipschool.org"
+  },
+  {
+    "name": "St. Stephen School",
+    "address": "401 Eucalyptus Dr., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.730674,
+    "lng": -122.47528,
+    "website": "http://www.ststephenschoolsf.org/"
+  },
+  {
+    "name": "St. Thomas More",
+    "address": "50 Thomas More Way, San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.712255,
+    "lng": -122.473044,
+    "website": "www.stthomasmoreschool.org"
+  },
+  {
+    "name": "St. Vincent de Paul School",
+    "address": "2350 Green St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.796274,
+    "lng": -122.437744,
+    "website": "svdpsf.com"
+  },
+  {
+    "name": "Stella Maris Academy",
+    "address": "360 9Th Ave, San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.781586,
+    "lng": -122.467362,
+    "website": "https://www.stellamarissf.org"
+  },
+  {
+    "name": "Sterne School",
+    "address": "838 Kearny St., San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "4-12",
+    "lat": 37.795892,
+    "lng": -122.404864,
+    "website": "www.sterneschool.org"
+  },
+  {
+    "name": "Stratford School",
+    "address": "301 De Montfort Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.723337,
+    "lng": -122.461497,
+    "website": "www.stratfordschools.com"
+  },
+  {
+    "name": "Stratford School",
+    "address": "645 14th Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.776134,
+    "lng": -122.472818,
+    "website": "www.stratfordschools.com"
+  },
+  {
+    "name": "Stratford School San Francisco",
+    "address": "75 Francis St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "6-8",
+    "lat": 37.727161,
+    "lng": -122.434847,
+    "website": "stratfordschools.com"
+  },
+  {
+    "name": "Sts. Peter and Paul Elementary",
+    "address": "660 Filbert St., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.80135,
+    "lng": -122.41036,
+    "website": "www.sspeterpaulsf.org"
+  },
+  {
+    "name": "Synergy School",
+    "address": "1387 Valencia St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "prek": true,
+    "lat": 37.750938,
+    "lng": -122.420143,
+    "website": "www.synergyschool.org"
+  },
+  {
+    "name": "TCS",
+    "address": "548 Market St., No 41193, San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "K-12",
+    "lat": 37.789971,
+    "lng": -122.400884,
+    "website": "tcsglobal.org"
+  },
+  {
+    "name": "Terra San Francisco School",
+    "address": "3801 Balboa St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-3",
+    "lat": 37.775338,
+    "lng": -122.499658,
+    "website": "https://www.terraschools.org/"
+  },
+  {
+    "name": "The Bay School of San Francisco",
+    "address": "35 Keyes Ave, San Francisco, CA",
+    "type": "independent",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.80078,
+    "lng": -122.455646,
+    "website": "bayschoolsf.org"
+  },
+  {
+    "name": "The Brandeis School of San Francisco",
+    "address": "655 Brotherhood Way, San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.713285,
+    "lng": -122.475599,
+    "website": "www.sfbrandeis.org"
+  },
+  {
+    "name": "The Dahlia School of San Francisco Elementary",
+    "address": "1245 4Th St., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-6",
+    "lat": 37.772413,
+    "lng": -122.391205,
+    "website": "www.thedahliaschoolsf.org",
+    "programs": ["spanish-immersion", "montessori"]
+  },
+  {
+    "name": "The Hamlin School",
+    "address": "2120 BRd.way St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.794904,
+    "lng": -122.432524,
+    "website": "https://www.hamlin.org/"
+  },
+  {
+    "name": "The International School of San Francisco",
+    "address": "150 Oak St., San Francisco, CA",
+    "type": "independent",
+    "level": "k12",
+    "grades": "K-12",
+    "lat": 37.775341,
+    "lng": -122.421751,
+    "website": "https://www.internationalsf.org/",
+    "programs": ["french-immersion"]
+  },
+  {
+    "name": "The Neos Bayview Academy",
+    "address": "950 Gilman Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.717953,
+    "lng": -122.387036,
+    "website": "neoskids.org"
+  },
+  {
+    "name": "Town School for Boys",
+    "address": "2750 Jackson St., San Francisco, CA",
+    "type": "independent",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.791895,
+    "lng": -122.440117,
+    "website": "www.townschool.com"
+  },
+  {
+    "name": "Urban School of San Francisco",
+    "address": "1563 Page St., San Francisco, CA",
+    "type": "independent",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.770967,
+    "lng": -122.446249,
+    "website": "www.urbanschool.org"
+  },
+  {
+    "name": "Wen Jian Ying",
+    "address": "259 Judson Ave., San Francisco, CA",
+    "type": "independent",
+    "level": "elementary",
+    "grades": "K-12",
+    "lat": 37.72816,
+    "lng": -122.447611,
+    "website": null
+  },
+  {
+    "name": "West Portal Lutheran School",
+    "address": "200 Sloat Blvd, San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.735255,
+    "lng": -122.473426,
+    "website": "https://www.wplsf.com/"
+  },
+  {
+    "name": "Zion Lutheran School",
+    "address": "495 9th Ave., San Francisco, CA",
+    "type": "parochial",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.779241,
+    "lng": -122.467633,
+    "website": "www.zionsfschool.org"
+  }
+];
+
+
+
+const schools = [
+  {
+    "name": "S.F. County Court Woodside Learning Ctr",
+    "address": "375 Woodside Avenue, W1, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "6-12",
+    "lat": 37.745756,
+    "lng": -122.45235,
+    "website": "http://www.sfusd.edu/"
+  },
+  {
+    "name": "S.F. County Opportunity (Hilltop)",
+    "address": "1325 Florida Street, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "6-12",
+    "lat": 37.750447,
+    "lng": -122.40965,
+    "website": "http://www.sfusd.edu/"
+  },
+  {
+    "name": "S.F. County Civic Center Secondary",
+    "address": "727 Golden Gate Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "k12",
+    "grades": "6-12",
+    "lat": 37.780691,
+    "lng": -122.42308,
+    "website": "http://www.sfusd.edu/"
+  },
+  {
+    "name": "S.F. County Special Education",
+    "address": "3045 Santiago Street, San Francisco, CA",
+    "type": "public",
+    "level": "k12",
+    "grades": "K-12",
+    "lat": 37.743844,
+    "lng": -122.49989,
+    "website": "http://www.sfusd.edu/"
+  },
+  {
+    "name": "KIPP Bayview Academy",
+    "address": "1060 Key Avenue, San Francisco, CA",
+    "type": "charter",
+    "level": "middle",
+    "grades": "5-8",
+    "lat": 37.71952,
+    "lng": -122.39637,
+    "website": "http://sfbay.kippnorcal.org/"
+  },
+  {
+    "name": "KIPP San Francisco Bay Academy",
+    "address": "1430 Scott Street, Third Floor, San Francisco, CA",
+    "type": "charter",
+    "level": "middle",
+    "grades": "5-8",
+    "lat": 37.783165,
+    "lng": -122.43759,
+    "website": "http://sfbay.kippnorcal.org/"
+  },
+  {
+    "name": "Five Keys Charter (SF Sheriff's)",
+    "address": "70 Oak Grove Street, San Francisco, CA",
+    "type": "charter",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.777211,
+    "lng": -122.40216,
+    "website": "http://www.fivekeyscharter.org"
+  },
+  {
+    "name": "Jordan (June) School for Equity",
+    "address": "325 La Grande Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.719997,
+    "lng": -122.4255,
+    "website": "http://www.sfusd.edu"
+  },
+  {
+    "name": "City Arts & Leadership Academy",
+    "address": "350 Seneca Avenue, San Francisco, CA",
+    "type": "charter",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.721751,
+    "lng": -122.44486,
+    "website": "http://www.es-cal.org"
+  },
+  {
+    "name": "Feinstein (Dianne) Elementary",
+    "address": "2550 25th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.739964,
+    "lng": -122.48185,
+    "website": null
+  },
+  {
+    "name": "Commodore Stockton Early Education School",
+    "address": "1 Trenton Street, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": false,
+    "programs": ["cantonese-immersion"],
+    "lat": 37.795046,
+    "lng": -122.40883,
+    "website": null
+  },
+  {
+    "name": "Noriega Early Education School",
+    "address": "1775 44th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": true,
+    "programs": ["cantonese-immersion"],
+    "lat": 37.753466,
+    "lng": -122.50338,
+    "website": null
+  },
+  {
+    "name": "San Miguel Early Education School",
+    "address": "300 Seneca Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.721211,
+    "lng": -122.44475,
+    "website": null
+  },
+  {
+    "name": "Presidio Early Ed.",
+    "address": "387 Moraga Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "lat": 37.797684,
+    "lng": -122.46107,
+    "website": null
+  },
+  {
+    "name": "Cooper (Sarah B.) Children Center",
+    "address": "940 Filbert Street, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "lat": 37.800719,
+    "lng": -122.41484,
+    "website": null
+  },
+  {
+    "name": "Raphael Weill Early Education School",
+    "address": "1501 O'Farrell Street, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.783512,
+    "lng": -122.43013,
+    "website": null
+  },
+  {
+    "name": "Tule Elk Park Early Education School",
+    "address": "2110 Greenwich Street, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": true,
+    "lat": 37.799407,
+    "lng": -122.43453,
+    "website": null
+  },
+  {
+    "name": "McLaren (John) Early Education School",
+    "address": "2055 Sunnydale Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.713557,
+    "lng": -122.42191,
+    "website": null
+  },
+  {
+    "name": "Leola Havard Early Education School",
+    "address": "1520 Oakdale Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": false,
+    "programs": ["samoan"],
+    "lat": 37.733772,
+    "lng": -122.38887,
+    "website": null
+  },
+  {
+    "name": "Theresa Mahler Early Education School",
+    "address": "990 Church Street, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": true,
+    "lat": 37.755547,
+    "lng": -122.428,
+    "website": null
+  },
+  {
+    "name": "Las Americas Early Education School",
+    "address": "801 Treat Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": false,
+    "programs": ["spanish-immersion"],
+    "lat": 37.757128,
+    "lng": -122.41265,
+    "website": null
+  },
+  {
+    "name": "Rodriguez (Zaida) Early Education School",
+    "address": "421 Bartlett Street, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": true,
+    "lat": 37.75018,
+    "lng": -122.41926,
+    "website": null
+  },
+  {
+    "name": "J. Serra Annex Early Education School",
+    "address": "155 Appleton Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": true,
+    "lat": 37.73789,
+    "lng": -122.42183,
+    "website": null
+  },
+  {
+    "name": "Mission Bay Early Education School",
+    "address": "1415 Owens Street, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": true,
+    "lat": 37.7704,
+    "lng": -122.39615,
+    "website": null
+  },
+  {
+    "name": "Jefferson Early Education School",
+    "address": "1350 25th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": true,
+    "lat": 37.76234,
+    "lng": -122.48338,
+    "website": null
+  },
+  {
+    "name": "Argonne Early Education School",
+    "address": "750 16th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": true,
+    "lat": 37.77393,
+    "lng": -122.47414,
+    "website": null
+  },
+  {
+    "name": "Tenderloin Early Education School",
+    "address": "627 Turk Street, San Francisco, CA",
+    "type": "public",
+    "level": "preschool",
+    "grades": "P",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.78181,
+    "lng": -122.41991,
+    "website": null
+  },
+  {
+    "name": "Five Keys Independence HS (SF Sheriff's)",
+    "address": "70 Oak Grove, San Francisco, CA",
+    "type": "charter",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.77717,
+    "lng": -122.40214,
+    "website": "http://www.fivekeyscharter.org"
+  },
+  {
+    "name": "S.F. International High",
+    "address": "655 DeHaro Street, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "8-12",
+    "lat": 37.76172,
+    "lng": -122.40062,
+    "website": "http://www.sfusd.edu"
+  },
+  {
+    "name": "Academy (The)- SF @McAteer",
+    "address": "555 Portola Drive, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.745874,
+    "lng": -122.44998,
+    "website": "http://www.sotacad.org/"
+  },
+  {
+    "name": "Chinese Immersion School at DeAvila",
+    "address": "1250 Waller Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.769464,
+    "lng": -122.44429,
+    "website": "http://www.sfusd.edu",
+    "programs": ["cantonese-immersion"]
+  },
+  {
+    "name": "San Francisco Public Montessori",
+    "address": "2340 Jackson Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": true,
+    "lat": 37.792616,
+    "lng": -122.43354,
+    "website": "http://www.sfpublicmontessori.com",
+    "programs": ["montessori"]
+  },
+  {
+    "name": "Gateway Middle",
+    "address": "1512 Golden Gate Avenue, San Francisco, CA",
+    "type": "charter",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.779439,
+    "lng": -122.436,
+    "website": "http://www.gatewaymiddle.org"
+  },
+  {
+    "name": "Mission Preparatory",
+    "address": "1050 York Street, San Francisco, CA",
+    "type": "charter",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.755441,
+    "lng": -122.40857,
+    "website": "http://www.missionpreparatory.org"
+  },
+  {
+    "name": "KIPP San Francisco College Preparatory",
+    "address": "1195 Hudson Avenue, San Francisco, CA",
+    "type": "charter",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.732378,
+    "lng": -122.38235,
+    "website": "http://sfcollegeprep.kippnorcal.org/"
+  },
+  {
+    "name": "Brown Jr. (Willie L) Middle",
+    "address": "2055 Silver Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.735911,
+    "lng": -122.39969,
+    "website": "https://www.sfusd.edu/school/willie-l-brown-jr-middle-school"
+  },
+  {
+    "name": "Wells (Ida B.) High",
+    "address": "1099 Hayes Street, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.775392,
+    "lng": -122.43446,
+    "website": "https://www.sfusd.edu/school/ida-b-wells-high-school"
+  },
+  {
+    "name": "Downtown High",
+    "address": "693 Vermont Street, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.760939,
+    "lng": -122.40407,
+    "website": "https://www.sfusd.edu/school/downtown-high-school"
+  },
+  {
+    "name": "Independence High",
+    "address": "1350 7th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.763243,
+    "lng": -122.46382,
+    "website": "https://www.sfusd.edu/school/independence-high-school"
+  },
+  {
+    "name": "Wallenberg (Raoul) Traditional High",
+    "address": "40 Vega Street, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.780171,
+    "lng": -122.44575,
+    "website": "https://www.sfusd.edu/school/raoul-wallenberg-high-school"
+  },
+  {
+    "name": "Burton (Phillip and Sala) Academic High",
+    "address": "400 Mansell Street, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.720698,
+    "lng": -122.40507,
+    "website": "https://www.sfusd.edu/school/phillip-and-sala-burton-academic-high-school"
+  },
+  {
+    "name": "Balboa High",
+    "address": "1000 Cayuga Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.722073,
+    "lng": -122.43985,
+    "website": "https://www.sfusd.edu/school/balboa-high-school"
+  },
+  {
+    "name": "Asawa (Ruth) SF Sch of the Arts, A Public School",
+    "address": "555 Portola Drive, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.745874,
+    "lng": -122.44998,
+    "website": "https://www.sfusd.edu/school/ruth-asawa-san-francisco-school-arts",
+    "programs": ["arts"]
+  },
+  {
+    "name": "Marshall (Thurgood) High",
+    "address": "45 Conkling Street, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "8-12",
+    "lat": 37.735717,
+    "lng": -122.40188,
+    "website": "https://www.sfusd.edu/school/thurgood-marshall-high-school"
+  },
+  {
+    "name": "Life Learning Academy Charter",
+    "address": "651 Eighth Street, Building 229 Treasure Island, San Francisco, CA",
+    "type": "charter",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.77091,
+    "lng": -122.40479,
+    "website": "http://www.llasf.org"
+  },
+  {
+    "name": "Gateway High",
+    "address": "1430 Scott Street, San Francisco, CA",
+    "type": "charter",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.783129,
+    "lng": -122.43773,
+    "website": "http://www.gatewayhigh.org"
+  },
+  {
+    "name": "Galileo High",
+    "address": "1150 Francisco Street, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.803401,
+    "lng": -122.42408,
+    "website": "https://www.sfusd.edu/school/galileo-academy-science-technology"
+  },
+  {
+    "name": "Lincoln (Abraham) High",
+    "address": "2162 24th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.747259,
+    "lng": -122.48132,
+    "website": "https://www.sfusd.edu/school/abraham-lincoln-high-school"
+  },
+  {
+    "name": "Lowell High",
+    "address": "1101 Eucalyptus Drive, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.731044,
+    "lng": -122.48355,
+    "website": "https://www.sfusd.edu/school/lowell-high-school"
+  },
+  {
+    "name": "Mission High",
+    "address": "3750 18th Street, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.761403,
+    "lng": -122.42728,
+    "website": "https://www.sfusd.edu/school/mission-high-school"
+  },
+  {
+    "name": "O'Connell (John) High",
+    "address": "2355 Folsom Street, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.759631,
+    "lng": -122.41468,
+    "website": "https://www.sfusd.edu/school/john-oconnell-high-school"
+  },
+  {
+    "name": "Washington (George) High",
+    "address": "600 32nd Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "9-12",
+    "lat": 37.777781,
+    "lng": -122.49203,
+    "website": "https://www.sfusd.edu/school/george-washington-high-school"
+  },
+  {
+    "name": "Alamo Elementary",
+    "address": "250 23rd Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.783124,
+    "lng": -122.48219,
+    "website": null
+  },
+  {
+    "name": "Alvarado Elementary",
+    "address": "625 Douglas Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.753675,
+    "lng": -122.43873,
+    "website": null,
+    "programs": ["spanish-immersion"]
+  },
+  {
+    "name": "Argonne Elementary",
+    "address": "680 18th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.77515,
+    "lng": -122.47679,
+    "website": null
+  },
+  {
+    "name": "Carmichael (Bessie)/FEC",
+    "address": "375 Seventh Street, San Francisco, CA",
+    "type": "public",
+    "level": "k8",
+    "grades": "K-8",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.775856,
+    "lng": -122.40674,
+    "website": null
+  },
+  {
+    "name": "Harte (Bret) Elementary",
+    "address": "1035 Gilman Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.71861,
+    "lng": -122.38889,
+    "website": null,
+    "programs": ["spanish-immersion"]
+  },
+  {
+    "name": "Bryant Elementary",
+    "address": "2641 25th Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.751628,
+    "lng": -122.4049,
+    "website": null,
+    "programs": ["spanish-immersion"]
+  },
+  {
+    "name": "Clarendon Alternative Elementary",
+    "address": "500 Clarendon Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.752989,
+    "lng": -122.45611,
+    "website": null,
+    "programs": ["japanese"]
+  },
+  {
+    "name": "Cleveland Elementary",
+    "address": "455 Athens Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.720733,
+    "lng": -122.42904,
+    "website": null
+  },
+  {
+    "name": "Sloat (Commodore) Elementary",
+    "address": "50 Darien Way, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.731881,
+    "lng": -122.47096,
+    "website": null
+  },
+  {
+    "name": "Lau (Gordon J.) Elementary",
+    "address": "950 Clay Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.793981,
+    "lng": -122.40868,
+    "website": null
+  },
+  {
+    "name": "Webster (Daniel) Elementary",
+    "address": "465 Missouri Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.760489,
+    "lng": -122.39623,
+    "website": null
+  },
+  {
+    "name": "Milk (Harvey) Civil Rights Elementary",
+    "address": "4235 19th Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.759148,
+    "lng": -122.43634,
+    "website": null
+  },
+  {
+    "name": "Thomas Edison Charter Academy",
+    "address": "3531 22nd Street, San Francisco, CA",
+    "type": "charter",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.754937,
+    "lng": -122.4262,
+    "website": "http://www.teca-sf.org"
+  },
+  {
+    "name": "Taylor (Edward R.) Elementary",
+    "address": "423 Burrows Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.728,
+    "lng": -122.40733,
+    "website": null
+  },
+  {
+    "name": "El Dorado Elementary",
+    "address": "70 Delta Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "P-5",
+    "lat": 37.719265,
+    "lng": -122.40673,
+    "website": null
+  },
+  {
+    "name": "Cobb (William L.) Elementary",
+    "address": "2725 California Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.788174,
+    "lng": -122.43918,
+    "website": null
+  },
+  {
+    "name": "Huerta (Dolores) Elementary",
+    "address": "65 Chenery Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.740659,
+    "lng": -122.42559,
+    "website": null
+  },
+  {
+    "name": "Key (Francis Scott) Elementary",
+    "address": "1530 43rd Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.758154,
+    "lng": -122.50249,
+    "website": null
+  },
+  {
+    "name": "McCoppin (Frank) Elementary",
+    "address": "651 Sixth Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.776283,
+    "lng": -122.46401,
+    "website": null
+  },
+  {
+    "name": "Garfield Elementary",
+    "address": "420 Filbert Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.8018,
+    "lng": -122.40673,
+    "website": null
+  },
+  {
+    "name": "Peabody (George) Elementary",
+    "address": "251 Sixth Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.783947,
+    "lng": -122.46456,
+    "website": null
+  },
+  {
+    "name": "Glen Park Elementary",
+    "address": "151 Lippard Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.733107,
+    "lng": -122.43608,
+    "website": null
+  },
+  {
+    "name": "Grattan Elementary",
+    "address": "165 Grattan Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": true,
+    "lat": 37.763858,
+    "lng": -122.45052,
+    "website": null
+  },
+  {
+    "name": "Guadalupe Elementary",
+    "address": "859 Prague Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": true,
+    "lat": 37.710438,
+    "lng": -122.43441,
+    "website": null
+  },
+  {
+    "name": "Yick Wo Elementary",
+    "address": "2245 Jones Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.801906,
+    "lng": -122.4163,
+    "website": null
+  },
+  {
+    "name": "Chavez (Cesar) Elementary",
+    "address": "825 Shotwell Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.75488,
+    "lng": -122.41541,
+    "website": null,
+    "programs": ["spanish-immersion"]
+  },
+  {
+    "name": "Hillcrest Elementary",
+    "address": "810 Silver Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.729026,
+    "lng": -122.41924,
+    "website": null
+  },
+  {
+    "name": "Parker (Jean) Elementary",
+    "address": "840 Broadway Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.797323,
+    "lng": -122.4111,
+    "website": null
+  },
+  {
+    "name": "Jefferson Elementary",
+    "address": "1725 Irving Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.763555,
+    "lng": -122.47635,
+    "website": null
+  },
+  {
+    "name": "Muir (John) Elementary",
+    "address": "380 Webster Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.773688,
+    "lng": -122.42909,
+    "website": null
+  },
+  {
+    "name": "Ortega (Jose) Elementary",
+    "address": "400 Sargent Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.716168,
+    "lng": -122.46625,
+    "website": null,
+    "programs": ["mandarin-immersion"]
+  },
+  {
+    "name": "Serra (Junipero) Elementary",
+    "address": "625 Holly Park Circle, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.736733,
+    "lng": -122.42113,
+    "website": null
+  },
+  {
+    "name": "Lafayette Elementary",
+    "address": "4545 Anza Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.777608,
+    "lng": -122.49688,
+    "website": null
+  },
+  {
+    "name": "Lakeshore Alternative Elementary",
+    "address": "220 Middlefield Drive, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.730603,
+    "lng": -122.48615,
+    "website": null
+  },
+  {
+    "name": "Lawton Alternative",
+    "address": "1570 31st Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.757952,
+    "lng": -122.48958,
+    "website": null
+  },
+  {
+    "name": "Flynn (Leonard R.) Elementary",
+    "address": "3125 Cesar Chavez Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.74819,
+    "lng": -122.41203,
+    "website": null,
+    "programs": ["spanish-immersion"]
+  },
+  {
+    "name": "Longfellow Elementary",
+    "address": "755 Morse Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.71046,
+    "lng": -122.44769,
+    "website": null
+  },
+  {
+    "name": "Marshall Elementary",
+    "address": "1575 15th Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.766679,
+    "lng": -122.41909,
+    "website": null
+  },
+  {
+    "name": "McKinley Elementary",
+    "address": "1025 14th Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.767229,
+    "lng": -122.43659,
+    "website": null
+  },
+  {
+    "name": "Miraloma Elementary",
+    "address": "175 Omar Way, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.739309,
+    "lng": -122.45021,
+    "website": null
+  },
+  {
+    "name": "Monroe Elementary",
+    "address": "260 Madrid Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.725224,
+    "lng": -122.43012,
+    "website": null
+  },
+  {
+    "name": "Revere (Paul) Elementary",
+    "address": "555 Tompkins Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.737142,
+    "lng": -122.41317,
+    "website": null,
+    "programs": ["spanish-immersion"]
+  },
+  {
+    "name": "Parks (Rosa) Elementary",
+    "address": "1501 O'Farrell Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.783681,
+    "lng": -122.42945,
+    "website": null
+  },
+  {
+    "name": "Redding Elementary",
+    "address": "1421 Pine Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.789726,
+    "lng": -122.41921,
+    "website": null
+  },
+  {
+    "name": "Stevenson (Robert Louis) Elementary",
+    "address": "2051 34th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.748857,
+    "lng": -122.4923,
+    "website": null
+  },
+  {
+    "name": "Sanchez Elementary",
+    "address": "325 Sanchez Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.763967,
+    "lng": -122.43076,
+    "website": null,
+    "programs": ["spanish-immersion"]
+  },
+  {
+    "name": "Sheridan Elementary",
+    "address": "431 Capitol Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.714331,
+    "lng": -122.45913,
+    "website": null
+  },
+  {
+    "name": "Sherman Elementary",
+    "address": "1651 Union Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.798273,
+    "lng": -122.4262,
+    "website": null
+  },
+  {
+    "name": "Malcolm X Academy",
+    "address": "350 Harbor Road, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.733734,
+    "lng": -122.38061,
+    "website": null
+  },
+  {
+    "name": "Spring Valley Elementary",
+    "address": "1451 Jackson Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.794403,
+    "lng": -122.41899,
+    "website": null
+  },
+  {
+    "name": "King (Thomas Starr) Elementary",
+    "address": "1215 Carolina Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.752765,
+    "lng": -122.39935,
+    "website": null,
+    "programs": ["mandarin-immersion"]
+  },
+  {
+    "name": "Sunnyside Elementary",
+    "address": "250 Foerster Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.730307,
+    "lng": -122.44879,
+    "website": "http://www.sunnysidesf.org/"
+  },
+  {
+    "name": "Sutro Elementary",
+    "address": "235 12th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.783932,
+    "lng": -122.47102,
+    "website": null
+  },
+  {
+    "name": "Ulloa Elementary",
+    "address": "2650 42nd Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.737302,
+    "lng": -122.49995,
+    "website": null
+  },
+  {
+    "name": "Visitacion Valley Elementary",
+    "address": "55 Schwerin Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.71268,
+    "lng": -122.41036,
+    "website": null
+  },
+  {
+    "name": "West Portal Elementary",
+    "address": "5 Lenox Way, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.743572,
+    "lng": -122.46468,
+    "website": null,
+    "programs": ["cantonese-immersion"]
+  },
+  {
+    "name": "Giannini (A.P.) Middle",
+    "address": "3151 Ortega Street, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.751425,
+    "lng": -122.49702,
+    "website": "https://www.sfusd.edu/school/ap-giannini-middle-school"
+  },
+  {
+    "name": "Francisco Middle",
+    "address": "2190 Powell Street, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.804816,
+    "lng": -122.41168,
+    "website": "https://www.sfusd.edu/school/francisco-middle-school"
+  },
+  {
+    "name": "Hoover (Herbert) Middle",
+    "address": "2290 14th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.74535,
+    "lng": -122.47031,
+    "website": "https://www.sfusd.edu/school/hoover-middle-school"
+  },
+  {
+    "name": "Denman (James) Middle",
+    "address": "241 Oneida Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.721993,
+    "lng": -122.44331,
+    "website": "https://www.sfusd.edu/school/denman-middle-school"
+  },
+  {
+    "name": "King Jr. (Martin Luther) Academic Middle",
+    "address": "350 Girard Street, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.727948,
+    "lng": -122.40491,
+    "website": "https://www.sfusd.edu/school/martin-luther-king-jr-academic-middle-school"
+  },
+  {
+    "name": "Roosevelt Middle",
+    "address": "460 Arguello Boulevard, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.782249,
+    "lng": -122.45895,
+    "website": "https://www.sfusd.edu/school/roosevelt-middle-school"
+  },
+  {
+    "name": "Visitacion Valley Middle",
+    "address": "1971 Visitacion Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.715632,
+    "lng": -122.41241,
+    "website": "https://www.sfusd.edu/school/visitacion-valley-middle-school"
+  },
+  {
+    "name": "Aptos Middle",
+    "address": "105 Aptos Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.730234,
+    "lng": -122.46623,
+    "website": "https://www.sfusd.edu/school/aptos-middle-school"
+  },
+  {
+    "name": "Everett Middle",
+    "address": "450 Church Street, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.763667,
+    "lng": -122.42858,
+    "website": "https://www.sfusd.edu/school/everett-middle-school"
+  },
+  {
+    "name": "Buena Vista/ Horace Mann K-8",
+    "address": "3351 23rd Street, San Francisco, CA",
+    "type": "public",
+    "level": "k8",
+    "grades": "K-8",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.753715,
+    "lng": -122.41974,
+    "website": null,
+    "programs": ["spanish-immersion"]
+  },
+  {
+    "name": "Lick (James) Middle",
+    "address": "1220 Noe Street, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.749543,
+    "lng": -122.43175,
+    "website": "https://www.sfusd.edu/school/lick-middle-school"
+  },
+  {
+    "name": "Marina Middle",
+    "address": "3500 Fillmore Street, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.801671,
+    "lng": -122.43636,
+    "website": "https://www.sfusd.edu/school/marina-middle-school"
+  },
+  {
+    "name": "Presidio Middle",
+    "address": "450 30th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "middle",
+    "grades": "6-8",
+    "lat": 37.780831,
+    "lng": -122.4901,
+    "website": "https://www.sfusd.edu/school/presidio-middle-school"
+  },
+  {
+    "name": "Lee (Edwin and Anita) Newcomer",
+    "address": "657 Merchant Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.794905,
+    "lng": -122.40414,
+    "website": null
+  },
+  {
+    "name": "Mission Education Center",
+    "address": "1670 Noe Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.742282,
+    "lng": -122.43106,
+    "website": null
+  },
+  {
+    "name": "Rooftop Elementary",
+    "address": "443 Burnett Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.754418,
+    "lng": -122.44388,
+    "website": null,
+    "programs": ["arts"]
+  },
+  {
+    "name": "San Francisco Community Alternative",
+    "address": "125 Excelsior Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.725815,
+    "lng": -122.43262,
+    "website": null
+  },
+  {
+    "name": "Carver (George Washington) Elementary",
+    "address": "1360 Oakdale Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.732403,
+    "lng": -122.38638,
+    "website": null
+  },
+  {
+    "name": "New Traditions Elementary",
+    "address": "2049 Grove Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.77431,
+    "lng": -122.45032,
+    "website": null,
+    "programs": ["arts"]
+  },
+  {
+    "name": "Moscone (George R.) Elementary",
+    "address": "2576 Harrison Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.756242,
+    "lng": -122.4123,
+    "website": null
+  },
+  {
+    "name": "Lilienthal (Claire) Elementary",
+    "address": "3630 Divisadero Street, San Francisco, CA",
+    "type": "public",
+    "level": "k8",
+    "grades": "K-8",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.803192,
+    "lng": -122.4435,
+    "website": null,
+    "programs": ["korean-immersion"]
+  },
+  {
+    "name": "Drew (Charles) College Preparatory Academy",
+    "address": "50 Pomona Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "prek": true,
+    "tuitionBased": false,
+    "lat": 37.731779,
+    "lng": -122.39355,
+    "website": null
+  },
+  {
+    "name": "Creative Arts Charter",
+    "address": "1601 Turk Street, San Francisco, CA",
+    "type": "charter",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.78003,
+    "lng": -122.43543,
+    "website": "http://www.creativeartscharter.org",
+    "programs": ["arts"]
+  },
+  {
+    "name": "Yu (Alice Fong) Elementary",
+    "address": "1541 12th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.759405,
+    "lng": -122.46931,
+    "website": null,
+    "programs": ["cantonese-immersion"]
+  },
+  {
+    "name": "Chin (John Yehall) Elementary",
+    "address": "350 Broadway Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.79831,
+    "lng": -122.40317,
+    "website": null
+  },
+  {
+    "name": "Sunset Elementary",
+    "address": "1920 41st Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.750743,
+    "lng": -122.49979,
+    "website": null
+  },
+  {
+    "name": "Tenderloin Community",
+    "address": "627 Turk Street, San Francisco, CA",
+    "type": "public",
+    "level": "elementary",
+    "grades": "K-5",
+    "lat": 37.782061,
+    "lng": -122.41979,
+    "website": null
+  },
+  {
+    "name": "San Francisco County ROP",
+    "address": "750 25th Avenue, San Francisco, CA",
+    "type": "public",
+    "level": "high",
+    "grades": "10-12",
+    "lat": 37.775302,
+    "lng": -122.48436,
+    "website": null
+  },
+  {
+    "name": "The New School of San Francisco",
+    "address": "940 Filbert St, San Francisco, CA",
+    "type": "charter",
+    "level": "k8",
+    "grades": "K-8",
+    "lat": 37.801011,
+    "lng": -122.41509,
+    "website": "http://www.newschoolsf.org"
+  },
+  {
+    "name": "KIPP Bayview Elementary",
+    "address": "948 Hollister Avenue, San Francisco, CA",
+    "type": "charter",
+    "level": "elementary",
+    "grades": "K-4",
+    "lat": 37.718359,
+    "lng": -122.38949,
+    "website": "http://bayviewelementary.kippnorcal.org/"
+  }
+];
+
+const caRatings = {"KIPP Bayview Academy": {"ela_color": 2, "ela_status": "-68.1", "math_color": 1, "math_status": "-105.1"}, "KIPP San Francisco Bay Academy": {"ela_color": 2, "ela_status": "-38.4", "math_color": 3, "math_status": "-59.1"}, "Jordan (June) School for Equity": {"ela_color": 1, "ela_status": "-157.8", "math_color": 2, "math_status": "-228.7"}, "City Arts & Leadership Academy": {"ela_color": 2, "ela_status": "-22.9", "math_color": 1, "math_status": "-161.3"}, "Feinstein (Dianne) Elementary": {"ela_color": 2, "ela_status": "-13.0", "math_color": 3, "math_status": "-11.9"}, "S.F. International High": {"ela_color": 2, "ela_status": "-160.5", "math_color": 2, "math_status": "-202.7"}, "Academy (The)- SF @McAteer": {"ela_color": 4, "ela_status": "13.6", "math_color": 2, "math_status": "-118.1"}, "Chinese Immersion School at DeAvila": {"ela_color": 5, "ela_status": "74.2", "math_color": 5, "math_status": "78.6"}, "San Francisco Public Montessori": {"ela_color": 5, "ela_status": "25.0", "math_color": 3, "math_status": "-16.2"}, "Gateway Middle": {"ela_color": 2, "ela_status": "-12.8", "math_color": 2, "math_status": "-57.4"}, "Mission Preparatory": {"ela_color": 2, "ela_status": "-13.0", "math_color": 2, "math_status": "-47.0"}, "KIPP San Francisco College Preparatory": {"ela_color": 4, "ela_status": "7.2", "math_color": 3, "math_status": "-113.7"}, "Brown Jr. (Willie L) Middle": {"ela_color": 3, "ela_status": "-22.7", "math_color": 3, "math_status": "-93.0"}, "Wells (Ida B.) High": {"ela_color": 2, "ela_status": "-305.8", "math_color": 2, "math_status": "-332.1"}, "Downtown High": {"ela_color": 1, "ela_status": "-234.9", "math_color": 1, "math_status": "-295.4"}, "Independence High": {"ela_color": 2, "ela_status": "-309.6", "math_color": 2, "math_status": "-336.4"}, "Wallenberg (Raoul) Traditional High": {"ela_color": 2, "ela_status": "-41.1", "math_color": 2, "math_status": "-85.9"}, "Burton (Phillip and Sala) Academic High": {"ela_color": 4, "ela_status": "25.2", "math_color": 3, "math_status": "-89.5"}, "Balboa High": {"ela_color": 3, "ela_status": "-0.6", "math_color": 2, "math_status": "-60.6"}, "Asawa (Ruth) SF Sch of the Arts, A Public School": {"ela_color": 4, "ela_status": "32.7", "math_color": 4, "math_status": "-54.6"}, "Marshall (Thurgood) High": {"ela_color": 1, "ela_status": "-189.8", "math_color": 1, "math_status": "-261.9"}, "Gateway High": {"ela_color": 4, "ela_status": "50.4", "math_color": 2, "math_status": "-73.0"}, "Galileo High": {"ela_color": 3, "ela_status": "2.1", "math_color": 3, "math_status": "-36.3"}, "Lincoln (Abraham) High": {"ela_color": 4, "ela_status": "23.3", "math_color": 4, "math_status": "-57.7"}, "Lowell High": {"ela_color": 4, "ela_status": "61.2", "math_color": 4, "math_status": "14.5"}, "Mission High": {"ela_color": 1, "ela_status": "-164.7", "math_color": 1, "math_status": "-207.4"}, "O'Connell (John) High": {"ela_color": 1, "ela_status": "-287.1", "math_color": 1, "math_status": "-301.5"}, "Washington (George) High": {"ela_color": 3, "ela_status": "25.2", "math_color": 3, "math_status": "-32.2"}, "Alamo Elementary": {"ela_color": 4, "ela_status": "37.3", "math_color": 4, "math_status": "30.1"}, "Alvarado Elementary": {"ela_color": 4, "ela_status": "25.4", "math_color": 4, "math_status": "3.3"}, "Argonne Elementary": {"ela_color": 4, "ela_status": "24.0", "math_color": 4, "math_status": "20.2"}, "Carmichael (Bessie)/FEC": {"ela_color": 1, "ela_status": "-113.5", "math_color": 1, "math_status": "-142.4"}, "Harte (Bret) Elementary": {"ela_color": 2, "ela_status": "-98.3", "math_color": 2, "math_status": "-95.2"}, "Bryant Elementary": {"ela_color": 1, "ela_status": "-101.2", "math_color": 1, "math_status": "-104.5"}, "Clarendon Alternative Elementary": {"ela_color": 4, "ela_status": "68.0", "math_color": 5, "math_status": "37.4"}, "Cleveland Elementary": {"ela_color": 1, "ela_status": "-111.7", "math_color": 3, "math_status": "-90.8"}, "Sloat (Commodore) Elementary": {"ela_color": 4, "ela_status": "30.0", "math_color": 4, "math_status": "25.3"}, "Lau (Gordon J.) Elementary": {"ela_color": 4, "ela_status": "24.2", "math_color": 4, "math_status": "35.1"}, "Webster (Daniel) Elementary": {"ela_color": 4, "ela_status": "23.8", "math_color": 4, "math_status": "-4.7"}, "Milk (Harvey) Civil Rights Elementary": {"ela_color": 4, "ela_status": "35.7", "math_color": 3, "math_status": "-11.5"}, "Thomas Edison Charter Academy": {"ela_color": 2, "ela_status": "-44.4", "math_color": 3, "math_status": "-71.3"}, "Taylor (Edward R.) Elementary": {"ela_color": 2, "ela_status": "-27.0", "math_color": 2, "math_status": "-26.6"}, "El Dorado Elementary": {"ela_color": 2, "ela_status": "-100.3", "math_color": 1, "math_status": "-135.5"}, "Cobb (William L.) Elementary": {"ela_color": 2, "ela_status": "-19.9", "math_color": 3, "math_status": "-19.5"}, "Huerta (Dolores) Elementary": {"ela_color": 3, "ela_status": "-40.6", "math_color": 3, "math_status": "-45.6"}, "Key (Francis Scott) Elementary": {"ela_color": 4, "ela_status": "43.8", "math_color": 5, "math_status": "36.9"}, "McCoppin (Frank) Elementary": {"ela_color": 4, "ela_status": "12.6", "math_color": 4, "math_status": "13.9"}, "Garfield Elementary": {"ela_color": 2, "ela_status": "-28.3", "math_color": 2, "math_status": "-53.4"}, "Peabody (George) Elementary": {"ela_color": 4, "ela_status": "71.5", "math_color": 4, "math_status": "46.5"}, "Glen Park Elementary": {"ela_color": 2, "ela_status": "-38.6", "math_color": 2, "math_status": "-47.2"}, "Grattan Elementary": {"ela_color": 4, "ela_status": "31.3", "math_color": 4, "math_status": "20.0"}, "Guadalupe Elementary": {"ela_color": 2, "ela_status": "-66.9", "math_color": 2, "math_status": "-67.0"}, "Yick Wo Elementary": {"ela_color": 4, "ela_status": "33.9", "math_color": 5, "math_status": "33.5"}, "Chavez (Cesar) Elementary": {"ela_color": 2, "ela_status": "-95.1", "math_color": 3, "math_status": "-86.1"}, "Hillcrest Elementary": {"ela_color": 1, "ela_status": "-91.9", "math_color": 2, "math_status": "-95.0"}, "Parker (Jean) Elementary": {"ela_color": 2, "ela_status": "-8.8", "math_color": 3, "math_status": "-0.9"}, "Jefferson Elementary": {"ela_color": 4, "ela_status": "27.4", "math_color": 4, "math_status": "13.2"}, "Muir (John) Elementary": {"ela_color": 3, "ela_status": "-9.1", "math_color": 5, "math_status": "29.6"}, "Ortega (Jose) Elementary": {"ela_color": 4, "ela_status": "23.0", "math_color": 4, "math_status": "45.6"}, "Serra (Junipero) Elementary": {"ela_color": 3, "ela_status": "-33.0", "math_color": 3, "math_status": "-44.4"}, "Lafayette Elementary": {"ela_color": 5, "ela_status": "70.0", "math_color": 5, "math_status": "62.5"}, "Lakeshore Alternative Elementary": {"ela_color": 2, "ela_status": "-25.9", "math_color": 2, "math_status": "-38.5"}, "Lawton Alternative": {"ela_color": 5, "ela_status": "66.5", "math_color": 5, "math_status": "46.3"}, "Flynn (Leonard R.) Elementary": {"ela_color": 3, "ela_status": "-41.6", "math_color": 3, "math_status": "-56.6"}, "Longfellow Elementary": {"ela_color": 3, "ela_status": "-64.8", "math_color": 3, "math_status": "-64.2"}, "Marshall Elementary": {"ela_color": 1, "ela_status": "-99.2", "math_color": 1, "math_status": "-98.6"}, "McKinley Elementary": {"ela_color": 5, "ela_status": "45.3", "math_color": 4, "math_status": "22.8"}, "Miraloma Elementary": {"ela_color": 4, "ela_status": "42.0", "math_color": 4, "math_status": "27.2"}, "Monroe Elementary": {"ela_color": 2, "ela_status": "-16.4", "math_color": 3, "math_status": "-13.7"}, "Revere (Paul) Elementary": {"ela_color": 2, "ela_status": "-113.7", "math_color": 1, "math_status": "-145.0"}, "Parks (Rosa) Elementary": {"ela_color": 3, "ela_status": "-46.8", "math_color": 3, "math_status": "-73.8"}, "Redding Elementary": {"ela_color": 2, "ela_status": "-58.4", "math_color": 2, "math_status": "-62.9"}, "Stevenson (Robert Louis) Elementary": {"ela_color": 5, "ela_status": "46.8", "math_color": 4, "math_status": "41.7"}, "Sanchez Elementary": {"ela_color": 3, "ela_status": "-58.0", "math_color": 3, "math_status": "-87.3"}, "Sheridan Elementary": {"ela_color": 2, "ela_status": "-39.8", "math_color": 3, "math_status": "-58.5"}, "Sherman Elementary": {"ela_color": 3, "ela_status": "2.9", "math_color": 3, "math_status": "-0.5"}, "Malcolm X Academy": {"ela_color": 2, "ela_status": "-96.9", "math_color": 1, "math_status": "-119.3"}, "Spring Valley Elementary": {"ela_color": 2, "ela_status": "-46.3", "math_color": 2, "math_status": "-51.3"}, "King (Thomas Starr) Elementary": {"ela_color": 4, "ela_status": "29.2", "math_color": 4, "math_status": "28.2"}, "Sunnyside Elementary": {"ela_color": 4, "ela_status": "26.9", "math_color": 4, "math_status": "3.7"}, "Sutro Elementary": {"ela_color": 5, "ela_status": "46.1", "math_color": 5, "math_status": "43.2"}, "Ulloa Elementary": {"ela_color": 4, "ela_status": "60.4", "math_color": 4, "math_status": "47.8"}, "Visitacion Valley Elementary": {"ela_color": 2, "ela_status": "-40.6", "math_color": 2, "math_status": "-58.7"}, "West Portal Elementary": {"ela_color": 4, "ela_status": "44.4", "math_color": 4, "math_status": "24.2"}, "Giannini (A.P.) Middle": {"ela_color": 4, "ela_status": "57.5", "math_color": 4, "math_status": "25.9"}, "Francisco Middle": {"ela_color": 3, "ela_status": "-45.0", "math_color": 2, "math_status": "-70.9"}, "Hoover (Herbert) Middle": {"ela_color": 4, "ela_status": "13.3", "math_color": 4, "math_status": "-9.6"}, "Denman (James) Middle": {"ela_color": 2, "ela_status": "-53.4", "math_color": 1, "math_status": "-97.2"}, "King Jr. (Martin Luther) Academic Middle": {"ela_color": 2, "ela_status": "-58.8", "math_color": 1, "math_status": "-99.3"}, "Roosevelt Middle": {"ela_color": 5, "ela_status": "56.5", "math_color": 4, "math_status": "24.1"}, "Visitacion Valley Middle": {"ela_color": 1, "ela_status": "-95.8", "math_color": 1, "math_status": "-148.0"}, "Aptos Middle": {"ela_color": 4, "ela_status": "16.5", "math_color": 4, "math_status": "-8.0"}, "Everett Middle": {"ela_color": 1, "ela_status": "-119.3", "math_color": 1, "math_status": "-148.2"}, "Buena Vista/ Horace Mann K-8": {"ela_color": 2, "ela_status": "-63.4", "math_color": 2, "math_status": "-91.6"}, "Lick (James) Middle": {"ela_color": 1, "ela_status": "-104.2", "math_color": 1, "math_status": "-154.2"}, "Marina Middle": {"ela_color": 3, "ela_status": "-12.8", "math_color": 2, "math_status": "-32.4"}, "Presidio Middle": {"ela_color": 4, "ela_status": "34.8", "math_color": 4, "math_status": "-4.9"}, "Mission Education Center": {"ela_color": 0, "ela_status": "-253.6", "math_color": 1, "math_status": "-180.1"}, "Rooftop Elementary": {"ela_color": 4, "ela_status": "19.9", "math_color": 4, "math_status": "-7.0"}, "San Francisco Community Alternative": {"ela_color": 2, "ela_status": "-12.8", "math_color": 3, "math_status": "-56.2"}, "Carver (George Washington) Elementary": {"ela_color": 1, "ela_status": "-101.2", "math_color": 1, "math_status": "-117.4"}, "New Traditions Elementary": {"ela_color": 5, "ela_status": "74.7", "math_color": 5, "math_status": "40.7"}, "Moscone (George R.) Elementary": {"ela_color": 2, "ela_status": "-34.5", "math_color": 2, "math_status": "-45.6"}, "Lilienthal (Claire) Elementary": {"ela_color": 5, "ela_status": "82.9", "math_color": 5, "math_status": "74.8"}, "Drew (Charles) College Preparatory Academy": {"ela_color": 1, "ela_status": "-103.1", "math_color": 1, "math_status": "-130.5"}, "Creative Arts Charter": {"ela_color": 4, "ela_status": "16.7", "math_color": 3, "math_status": "-23.9"}, "Yu (Alice Fong) Elementary": {"ela_color": 5, "ela_status": "83.3", "math_color": 5, "math_status": "68.7"}, "Chin (John Yehall) Elementary": {"ela_color": 5, "ela_status": "94.3", "math_color": 5, "math_status": "79.1"}, "Sunset Elementary": {"ela_color": 5, "ela_status": "83.0", "math_color": 5, "math_status": "82.1"}, "Tenderloin Community": {"ela_color": 1, "ela_status": "-82.4", "math_color": 2, "math_status": "-89.7"}, "The New School of San Francisco": {"ela_color": 5, "ela_status": "47.6", "math_color": 4, "math_status": "33.8"}, "KIPP Bayview Elementary": {"ela_color": 3, "ela_status": "-67.5", "math_color": 3, "math_status": "-77.9"}};
+
+const sfusdK = {
+  "Alamo Elementary": {ge:{all:{req:423.3,asgn:68.3,pct:0.16,succ:0.84},esaa:{req:70.3,asgn:56.7,pct:0.81,succ:0.96},ctip1:{req:13.3,asgn:0.7,pct:0.05,succ:1.0},notb:{req:225.7,asgn:5.3,pct:0.02,succ:0.8}},immersion:null},
+  "Alvarado Elementary": {ge:{all:{req:398.3,asgn:42.0,pct:0.11,succ:0.76},esaa:{req:67.7,asgn:28.0,pct:0.41,succ:0.72},ctip1:{req:49.0,asgn:10.3,pct:0.21,succ:1.0},notb:{req:190.7,asgn:0.7,pct:0.0,succ:0.7}},immersion:{all:{req:419.0,asgn:44.0,pct:0.11,succ:0.65},esaa:null,ctip1:{req:67.3,asgn:16.0,pct:0.24,succ:0.85},notb:{req:222.6,asgn:4.3,pct:0.02,succ:0.56}},immLabel:"Spanish Immersion"},
+  "Argonne Elementary": {ge:{all:{req:470.7,asgn:63.7,pct:0.14,succ:0.85},esaa:{req:59.7,asgn:46.0,pct:0.77,succ:1.0},ctip1:{req:14.0,asgn:2.0,pct:0.14,succ:1.0},notb:{req:284.7,asgn:11.7,pct:0.04,succ:0.81}},immersion:null},
+  "Bryant Elementary": {ge:{all:{req:79.3,asgn:19.7,pct:0.25,succ:1.0},esaa:{req:9.0,asgn:3.3,pct:0.37,succ:1.0},ctip1:{req:27.3,asgn:4.3,pct:0.16,succ:1.0},notb:{req:34.7,asgn:11.7,pct:0.34,succ:1.0}},immersion:{all:{req:57.3,asgn:19.3,pct:0.34,succ:0.96},esaa:null,ctip1:{req:29.3,asgn:9.3,pct:0.32,succ:1.0},notb:{req:14.0,asgn:6.0,pct:0.43,succ:0.83}},immLabel:"Spanish Immersion"},
+  "Buena Vista/ Horace Mann K-8": {ge:null,immersion:{all:{req:201.4,asgn:52.7,pct:0.26,succ:0.95},esaa:null,ctip1:{req:71.7,asgn:23.0,pct:0.32,succ:1.0},notb:{req:87.3,asgn:19.6,pct:0.22,succ:0.89}},immLabel:"Spanish Immersion"},
+  "Carmichael (Bessie)/FEC": {ge:{all:{req:87.7,asgn:41.7,pct:0.48,succ:1.0},esaa:null,ctip1:{req:20.7,asgn:6.7,pct:0.32,succ:1.0},notb:{req:38.0,asgn:24.0,pct:0.63,succ:1.0}},immersion:{all:{req:21.0,asgn:13.0,pct:0.62,succ:1.0},esaa:null,ctip1:{req:4.3,asgn:3.7,pct:0.85,succ:1.0},notb:{req:5.0,asgn:1.0,pct:0.2,succ:1.0}},immLabel:"Filipino FLES"},
+  "Carver (George Washington) Elementary": {ge:{all:{req:41.7,asgn:18.7,pct:0.45,succ:1.0},esaa:{req:11.7,asgn:5.7,pct:0.49,succ:1.0},ctip1:{req:20.0,asgn:7.7,pct:0.38,succ:1.0},notb:{req:19.7,asgn:10.7,pct:0.54,succ:1.0}},immersion:null},
+  "Chavez (Cesar) Elementary": {ge:{all:{req:102.3,asgn:19.3,pct:0.19,succ:1.0},esaa:{req:10.7,asgn:2.3,pct:0.22,succ:1.0},ctip1:{req:44.7,asgn:6.3,pct:0.14,succ:1.0},notb:{req:39.0,asgn:11.3,pct:0.29,succ:1.0}},immersion:{all:{req:82.0,asgn:27.3,pct:0.33,succ:1.0},esaa:null,ctip1:{req:45.7,asgn:16.0,pct:0.35,succ:1.0},notb:{req:20.7,asgn:8.0,pct:0.39,succ:1.0}},immLabel:"Spanish Immersion"},
+  "Chin (John Yehall) Elementary": {ge:{all:{req:165.0,asgn:31.0,pct:0.19,succ:0.87},esaa:{req:10.3,asgn:6.3,pct:0.61,succ:1.0},ctip1:{req:11.3,asgn:2.3,pct:0.21,succ:1.0},notb:{req:100.0,asgn:17.7,pct:0.18,succ:0.87}},immersion:null},
+  "Chinese Immersion School at DeAvila": {ge:null,immersion:{all:{req:352.3,asgn:58.4,pct:0.16,succ:0.7},esaa:null,ctip1:{req:29.3,asgn:7.4,pct:0.25,succ:1.0},notb:{req:206.0,asgn:32.0,pct:0.15,succ:0.66}},immLabel:"Cantonese Immersion"},
+  "Clarendon Alternative Elementary": {ge:{all:{req:671.0,asgn:44.0,pct:0.07,succ:0.73},esaa:{req:85.7,asgn:33.3,pct:0.39,succ:0.73},ctip1:{req:44.7,asgn:6.7,pct:0.15,succ:1.0},notb:{req:385.7,asgn:0.0,pct:0.0,succ:0.69}},immersion:{all:{req:322.7,asgn:43.7,pct:0.14,succ:0.67},esaa:null,ctip1:{req:24.3,asgn:6.0,pct:0.25,succ:1.0},notb:{req:195.0,asgn:21.7,pct:0.11,succ:0.6}},immLabel:"Japanese Immersion"},
+  "Cleveland Elementary": {ge:{all:{req:71.3,asgn:19.3,pct:0.27,succ:1.0},esaa:{req:9.3,asgn:3.3,pct:0.36,succ:1.0},ctip1:{req:11.3,asgn:1.3,pct:0.12,succ:1.0},notb:{req:38.3,asgn:14.0,pct:0.37,succ:1.0}},immersion:{all:{req:48.3,asgn:14.7,pct:0.3,succ:1.0},esaa:null,ctip1:{req:5.3,asgn:0.7,pct:0.13,succ:1.0},notb:{req:27.0,asgn:10.3,pct:0.38,succ:1.0}},immLabel:"Spanish Immersion"},
+  "Cobb (William L.) Elementary": {ge:{all:{req:113.3,asgn:25.7,pct:0.23,succ:0.97},esaa:{req:12.0,asgn:4.7,pct:0.39,succ:0.97},ctip1:{req:18.3,asgn:5.7,pct:0.31,succ:1.0},notb:{req:59.3,asgn:13.3,pct:0.22,succ:1.0}},immersion:null},
+  "Drew (Charles) College Preparatory Academy": {ge:{all:{req:73.0,asgn:39.3,pct:0.54,succ:1.0},esaa:{req:11.7,asgn:8.7,pct:0.74,succ:1.0},ctip1:{req:34.3,asgn:15.3,pct:0.45,succ:1.0},notb:{req:22.7,asgn:16.0,pct:0.71,succ:1.0}},immersion:null},
+  "El Dorado Elementary": {ge:{all:{req:58.7,asgn:16.3,pct:0.28,succ:0.95},esaa:{req:7.0,asgn:2.7,pct:0.38,succ:0.86},ctip1:{req:18.7,asgn:4.0,pct:0.21,succ:0.98},notb:{req:25.3,asgn:8.0,pct:0.32,succ:0.97}},immersion:null},
+  "Feinstein (Dianne) Elementary": {ge:{all:{req:407.7,asgn:64.0,pct:0.16,succ:0.91},esaa:{req:47.0,asgn:29.7,pct:0.63,succ:1.0},ctip1:null,notb:{req:249.0,asgn:22.7,pct:0.09,succ:0.86}},immersion:null},
+  "Flynn (Leonard R.) Elementary": {ge:{all:{req:119.3,asgn:21.3,pct:0.18,succ:0.98},esaa:{req:20.0,asgn:5.3,pct:0.27,succ:1.0},ctip1:{req:1.0,asgn:0.0,pct:0.0,succ:1.0},notb:{req:42.3,asgn:9.0,pct:0.21,succ:0.95}},immersion:{all:{req:188.0,asgn:39.6,pct:0.21,succ:0.9},esaa:null,ctip1:{req:3.0,asgn:0.7,pct:0.22,succ:0.89},notb:{req:83.7,asgn:18.3,pct:0.22,succ:0.87}},immLabel:"Spanish Immersion"},
+  "Garfield Elementary": {ge:{all:{req:88.7,asgn:25.3,pct:0.29,succ:0.98},esaa:{req:8.7,asgn:5.0,pct:0.58,succ:1.0},ctip1:null,notb:{req:48.7,asgn:17.0,pct:0.35,succ:0.97}},immersion:{all:{req:62.0,asgn:14.3,pct:0.23,succ:0.89},esaa:null,ctip1:{req:0.3,asgn:0.3,pct:1.0,succ:1.0},notb:{req:42.0,asgn:9.7,pct:0.23,succ:0.86}},immLabel:"Cantonese Immersion"},
+  "Glen Park Elementary": {ge:{all:{req:302.7,asgn:44.7,pct:0.15,succ:0.89},esaa:{req:40.0,asgn:25.7,pct:0.64,succ:1.0},ctip1:{req:1.0,asgn:0.3,pct:0.33,succ:1.0},notb:{req:162.0,asgn:11.0,pct:0.07,succ:0.87}},immersion:{all:{req:33.0,asgn:9.3,pct:0.28,succ:1.0},esaa:null,ctip1:null,notb:{req:18.7,asgn:6.0,pct:0.32,succ:1.0}},immLabel:"Spanish Immersion"},
+  "Grattan Elementary": {ge:{all:{req:486.7,asgn:68.0,pct:0.14,succ:0.81},esaa:{req:51.0,asgn:46.0,pct:0.9,succ:1.0},ctip1:{req:1.3,asgn:0.0,pct:0.0,succ:1.0},notb:{req:272.3,asgn:8.3,pct:0.03,succ:0.78}},immersion:null},
+  "Guadalupe Elementary": {ge:{all:{req:68.7,asgn:18.3,pct:0.27,succ:0.97},esaa:{req:13.7,asgn:5.7,pct:0.41,succ:1.0},ctip1:{req:0.3,asgn:0.3,pct:1.0,succ:1.0},notb:{req:30.3,asgn:9.3,pct:0.31,succ:1.0}},immersion:{all:{req:37.7,asgn:15.0,pct:0.4,succ:1.0},esaa:null,ctip1:null,notb:{req:19.0,asgn:11.0,pct:0.58,succ:1.0}},immLabel:"Spanish Immersion"},
+  "Harte (Bret) Elementary": {ge:{all:{req:44.7,asgn:20.0,pct:0.45,succ:1.0},esaa:{req:6.7,asgn:3.3,pct:0.5,succ:1.0},ctip1:{req:1.0,asgn:0.3,pct:0.33,succ:1.0},notb:{req:16.3,asgn:11.3,pct:0.69,succ:1.0}},immersion:{all:{req:40.7,asgn:18.3,pct:0.45,succ:0.96},esaa:null,ctip1:{req:0.3,asgn:0.0,pct:0.0,succ:1.0},notb:{req:14.7,asgn:5.6,pct:0.39,succ:0.91}},immLabel:"Spanish Immersion"},
+  "Hillcrest Elementary": {ge:{all:{req:95.0,asgn:25.3,pct:0.27,succ:1.0},esaa:{req:13.0,asgn:3.3,pct:0.26,succ:1.0},ctip1:{req:0.3,asgn:0.0,pct:0.0,succ:1.0},notb:{req:44.7,asgn:15.0,pct:0.34,succ:1.0}},immersion:{all:{req:43.7,asgn:15.0,pct:0.34,succ:1.0},esaa:null,ctip1:{req:0.3,asgn:0.0,pct:0.0,succ:0.0},notb:{req:20.3,asgn:10.3,pct:0.51,succ:1.0}},immLabel:"Spanish Immersion"},
+  "Huerta (Dolores) Elementary": {ge:null,immersion:{all:{req:304.4,asgn:58.0,pct:0.19,succ:0.75},esaa:null,ctip1:{req:2.4,asgn:0.0,pct:0.0,succ:0.72},notb:{req:157.3,asgn:20.7,pct:0.13,succ:0.67}},immLabel:"Spanish Immersion"},
+  "Jefferson Elementary": {ge:{all:{req:492.3,asgn:88.7,pct:0.18,succ:0.89},esaa:{req:65.7,asgn:51.3,pct:0.78,succ:1.0},ctip1:null,notb:{req:293.0,asgn:27.3,pct:0.09,succ:0.83}},immersion:null},
+  "Key (Francis Scott) Elementary": {ge:{all:{req:454.7,asgn:80.3,pct:0.18,succ:0.85},esaa:{req:73.3,asgn:63.7,pct:0.87,succ:1.0},ctip1:null,notb:{req:264.3,asgn:7.3,pct:0.03,succ:0.81}},immersion:null},
+  "King (Thomas Starr) Elementary": {ge:{all:{req:79.3,asgn:22.0,pct:0.28,succ:1.0},esaa:{req:6.7,asgn:2.0,pct:0.3,succ:1.0},ctip1:{req:0.3,asgn:0.0,pct:0.0,succ:1.0},notb:{req:37.0,asgn:18.7,pct:0.5,succ:1.0}},immersion:{all:{req:145.4,asgn:43.3,pct:0.3,succ:0.78},esaa:null,ctip1:{req:0.3,asgn:0.3,pct:1.0,succ:1.0},notb:{req:73.4,asgn:20.7,pct:0.28,succ:0.66}},immLabel:"Mandarin Immersion"},
+  "Lafayette Elementary": {ge:{all:{req:417.3,asgn:73.7,pct:0.18,succ:0.83},esaa:{req:78.7,asgn:65.0,pct:0.83,succ:0.96},ctip1:{req:0.7,asgn:0.0,pct:0.0,succ:1.0},notb:{req:227.7,asgn:3.0,pct:0.01,succ:0.78}},immersion:null},
+  "Lakeshore Alternative Elementary": {ge:{all:{req:269.0,asgn:64.0,pct:0.24,succ:0.95},esaa:{req:22.7,asgn:16.3,pct:0.72,succ:1.0},ctip1:{req:2.0,asgn:0.7,pct:0.33,succ:0.67},notb:{req:160.3,asgn:36.0,pct:0.22,succ:0.93}},immersion:null},
+  "Lau (Gordon J.) Elementary": {ge:{all:{req:163.3,asgn:40.0,pct:0.24,succ:0.96},esaa:{req:22.3,asgn:8.0,pct:0.36,succ:1.0},ctip1:{req:0.3,asgn:0.0,pct:0.0,succ:1.0},notb:{req:80.3,asgn:22.0,pct:0.27,succ:0.92}},immersion:{all:{req:90.3,asgn:58.7,pct:0.65,succ:0.97},esaa:null,ctip1:null,notb:{req:41.7,asgn:32.3,pct:0.78,succ:0.94}},immLabel:"Cantonese Immersion"},
+  "Lawton Alternative": {ge:{all:{req:759.7,asgn:65.3,pct:0.09,succ:0.73},esaa:null,ctip1:{req:2.0,asgn:0.0,pct:0.0,succ:0.33},notb:{req:493.0,asgn:33.0,pct:0.07,succ:0.7}},immersion:null},
+  "Lilienthal (Claire) Elementary": {ge:{all:{req:552.0,asgn:69.0,pct:0.13,succ:0.65},esaa:null,ctip1:{req:2.0,asgn:0.3,pct:0.17,succ:0.67},notb:{req:337.3,asgn:35.7,pct:0.11,succ:0.59}},immersion:{all:{req:134.0,asgn:20.6,pct:0.16,succ:0.69},esaa:null,ctip1:null,notb:{req:78.0,asgn:10.0,pct:0.13,succ:0.65}},immLabel:"Korean Immersion"},
+  "Longfellow Elementary": {ge:{all:{req:85.0,asgn:26.0,pct:0.31,succ:1.0},esaa:{req:16.0,asgn:7.0,pct:0.44,succ:1.0},ctip1:null,notb:{req:39.0,asgn:16.0,pct:0.41,succ:1.0}},immersion:{all:{req:65.4,asgn:31.3,pct:0.48,succ:1.0},esaa:null,ctip1:{req:0.3,asgn:0.0,pct:0.0,succ:1.0},notb:{req:31.0,asgn:19.0,pct:0.61,succ:1.0}},immLabel:"Filipino FLES / Spanish Immersion"},
+  "Malcolm X Academy": {ge:{all:{req:28.0,asgn:15.7,pct:0.56,succ:1.0},esaa:{req:5.0,asgn:3.7,pct:0.73,succ:1.0},ctip1:{req:0.3,asgn:0.3,pct:1.0,succ:1.0},notb:{req:13.3,asgn:7.3,pct:0.55,succ:1.0}},immersion:null},
+  "Marshall Elementary": {ge:null,immersion:{all:{req:138.0,asgn:39.0,pct:0.29,succ:0.96},esaa:null,ctip1:{req:2.7,asgn:1.0,pct:0.37,succ:0.62},notb:{req:53.4,asgn:13.0,pct:0.25,succ:0.95}},immLabel:"Spanish Immersion"},
+  "McCoppin (Frank) Elementary": {ge:{all:{req:393.7,asgn:41.3,pct:0.1,succ:0.82},esaa:{req:37.7,asgn:28.0,pct:0.74,succ:0.98},ctip1:{req:0.3,asgn:0.3,pct:1.0,succ:1.0},notb:{req:229.3,asgn:6.3,pct:0.03,succ:0.79}},immersion:null},
+  "McKinley Elementary": {ge:{all:{req:350.7,asgn:37.7,pct:0.11,succ:0.8},esaa:{req:40.3,asgn:28.3,pct:0.7,succ:0.94},ctip1:{req:1.0,asgn:0.3,pct:0.33,succ:1.0},notb:{req:186.3,asgn:1.0,pct:0.01,succ:0.75}},immersion:null},
+  "Milk (Harvey) Civil Rights Elementary": {ge:{all:{req:236.0,asgn:32.7,pct:0.14,succ:0.8},esaa:{req:29.3,asgn:20.0,pct:0.68,succ:0.98},ctip1:{req:0.7,asgn:0.3,pct:0.5,succ:1.0},notb:{req:137.7,asgn:6.7,pct:0.05,succ:0.72}},immersion:null},
+  "Miraloma Elementary": {ge:{all:{req:417.3,asgn:46.3,pct:0.11,succ:0.82},esaa:{req:55.3,asgn:33.7,pct:0.61,succ:0.88},ctip1:null,notb:{req:241.3,asgn:5.3,pct:0.02,succ:0.78}},immersion:null},
+  "Monroe Elementary": {ge:{all:{req:176.0,asgn:23.3,pct:0.13,succ:0.93},esaa:{req:28.0,asgn:7.0,pct:0.25,succ:1.0},ctip1:null,notb:{req:86.3,asgn:12.3,pct:0.14,succ:0.9}},immersion:{all:{req:222.7,asgn:66.0,pct:0.3,succ:0.88},esaa:null,ctip1:{req:1.3,asgn:0.0,pct:0.0,succ:0.77},notb:{req:121.3,asgn:44.0,pct:0.36,succ:0.83}},immLabel:"Cantonese Immersion / Spanish Immersion"},
+  "Moscone (George R.) Elementary": {ge:{all:{req:86.7,asgn:24.0,pct:0.28,succ:0.98},esaa:{req:11.0,asgn:3.0,pct:0.27,succ:1.0},ctip1:{req:2.0,asgn:0.0,pct:0.0,succ:0.33},notb:{req:36.3,asgn:9.7,pct:0.27,succ:0.95}},immersion:{all:{req:86.0,asgn:31.7,pct:0.37,succ:0.95},esaa:null,ctip1:{req:1.3,asgn:0.0,pct:0.0,succ:0.5},notb:{req:25.6,asgn:7.3,pct:0.28,succ:0.87}},immLabel:"Cantonese Immersion / Spanish Immersion"},
+  "Muir (John) Elementary": {ge:{all:{req:107.0,asgn:18.7,pct:0.17,succ:0.97},esaa:{req:14.3,asgn:5.3,pct:0.37,succ:0.95},ctip1:{req:0.3,asgn:0.0,pct:0.0,succ:1.0},notb:{req:55.0,asgn:8.7,pct:0.16,succ:1.0}},immersion:{all:{req:20.7,asgn:11.7,pct:0.56,succ:1.0},esaa:null,ctip1:{req:0.3,asgn:0.0,pct:0.0,succ:0.0},notb:{req:8.7,asgn:5.7,pct:0.65,succ:1.0}},immLabel:"Spanish Immersion"},
+  "New Traditions Elementary": {ge:{all:{req:377.3,asgn:45.7,pct:0.12,succ:0.78},esaa:{req:53.0,asgn:37.0,pct:0.7,succ:0.88},ctip1:{req:1.0,asgn:0.0,pct:0.0,succ:1.0},notb:{req:205.7,asgn:0.0,pct:0.0,succ:0.74}},immersion:null},
+  "Ortega (Jose) Elementary": {ge:{all:{req:219.3,asgn:41.3,pct:0.19,succ:0.88},esaa:{req:20.7,asgn:12.3,pct:0.6,succ:1.0},ctip1:{req:0.3,asgn:0.0,pct:0.0,succ:0.0},notb:{req:117.7,asgn:20.7,pct:0.18,succ:0.87}},immersion:{all:{req:254.6,asgn:22.0,pct:0.09,succ:0.6},esaa:null,ctip1:{req:1.3,asgn:0.0,pct:0.0,succ:0.52},notb:{req:151.0,asgn:7.0,pct:0.05,succ:0.53}},immLabel:"Mandarin Immersion"},
+  "Parker (Jean) Elementary": {ge:{all:{req:91.3,asgn:17.7,pct:0.19,succ:1.0},esaa:{req:10.7,asgn:2.3,pct:0.22,succ:1.0},ctip1:{req:5.0,asgn:0.3,pct:null,succ:null},notb:{req:55.7,asgn:14.0,pct:0.25,succ:1.0}},immersion:null},
+  "Parks (Rosa) Elementary": {ge:{all:{req:94.0,asgn:19.7,pct:0.21,succ:0.92},esaa:{req:17.3,asgn:8.3,pct:0.48,succ:1.0},ctip1:{req:2.0,asgn:0.3,pct:0.17,succ:1.0},notb:{req:41.0,asgn:6.0,pct:0.15,succ:0.93}},immersion:{all:{req:73.0,asgn:23.0,pct:0.31,succ:0.93},esaa:null,ctip1:{req:6.7,asgn:3.3,pct:0.5,succ:1.0},notb:{req:37.7,asgn:12.7,pct:0.33,succ:0.97}},immLabel:"Japanese Immersion"},
+  "Peabody (George) Elementary": {ge:{all:{req:592.3,asgn:44.3,pct:0.07,succ:0.67},esaa:{req:32.7,asgn:25.7,pct:0.79,succ:0.93},ctip1:{req:26.7,asgn:4.7,pct:0.18,succ:1.0},notb:{req:361.3,asgn:5.0,pct:0.01,succ:0.65}},immersion:null},
+  "Redding Elementary": {ge:{all:{req:96.3,asgn:41.3,pct:0.43,succ:1.0},esaa:{req:17.0,asgn:8.3,pct:0.49,succ:1.0},ctip1:{req:1.0,asgn:0.7,pct:0.67,succ:1.0},notb:{req:50.3,asgn:27.0,pct:0.54,succ:1.0}},immersion:null},
+  "Revere (Paul) Elementary": {ge:{all:{req:57.7,asgn:25.3,pct:0.44,succ:1.0},esaa:null,ctip1:{req:0.7,asgn:0.7,pct:1.0,succ:1.0},notb:{req:30.3,asgn:21.0,pct:0.69,succ:1.0}},immersion:{all:{req:60.3,asgn:20.0,pct:0.33,succ:0.99},esaa:null,ctip1:{req:16.0,asgn:7.0,pct:0.43,succ:1.0},notb:{req:30.0,asgn:9.6,pct:0.32,succ:1.0}},immLabel:"Spanish Immersion"},
+  "Rooftop Elementary": {ge:{all:{req:561.7,asgn:51.3,pct:0.09,succ:0.78},esaa:null,ctip1:{req:1.3,asgn:0.3,pct:0.25,succ:1.0},notb:{req:355.7,asgn:25.7,pct:0.07,succ:0.75}},immersion:null},
+  "San Francisco Community Alternative": {ge:{all:{req:138.0,asgn:35.3,pct:0.26,succ:0.95},esaa:null,ctip1:{req:14.0,asgn:1.7,pct:0.12,succ:1.0},notb:{req:89.0,asgn:27.7,pct:0.31,succ:0.93}},immersion:null},
+  "San Francisco Public Montessori": {ge:{all:{req:214.3,asgn:25.3,pct:0.12,succ:0.82},esaa:null,ctip1:{req:1.3,asgn:0.3,pct:0.25,succ:1.0},notb:{req:143.3,asgn:14.7,pct:0.1,succ:0.77}},immersion:null},
+  "Sanchez Elementary": {ge:{all:{req:83.0,asgn:19.0,pct:0.23,succ:1.0},esaa:{req:10.7,asgn:4.0,pct:0.38,succ:1.0},ctip1:{req:0.7,asgn:0.0,pct:0.0,succ:1.0},notb:{req:35.0,asgn:10.3,pct:0.3,succ:1.0}},immersion:{all:{req:37.3,asgn:9.3,pct:0.25,succ:1.0},esaa:null,ctip1:{req:16.0,asgn:2.7,pct:0.17,succ:1.0},notb:{req:13.7,asgn:4.7,pct:0.34,succ:1.0}},immLabel:"Spanish Immersion"},
+  "Serra (Junipero) Elementary": {ge:{all:{req:108.0,asgn:18.7,pct:0.17,succ:0.94},esaa:{req:17.3,asgn:7.3,pct:0.42,succ:1.0},ctip1:null,notb:{req:52.7,asgn:6.7,pct:0.13,succ:0.9}},immersion:{all:{req:33.0,asgn:13.3,pct:0.4,succ:1.0},esaa:null,ctip1:{req:7.3,asgn:2.3,pct:0.32,succ:1.0},notb:{req:17.7,asgn:9.3,pct:0.53,succ:1.0}},immLabel:"Spanish Immersion"},
+  "Sheridan Elementary": {ge:{all:{req:96.0,asgn:37.7,pct:0.39,succ:1.0},esaa:{req:13.0,asgn:7.3,pct:0.56,succ:1.0},ctip1:null,notb:{req:56.3,asgn:26.3,pct:0.47,succ:1.0}},immersion:null},
+  "Sherman Elementary": {ge:{all:{req:230.7,asgn:54.3,pct:0.24,succ:0.82},esaa:{req:51.3,asgn:35.7,pct:0.69,succ:0.95},ctip1:{req:1.0,asgn:0.3,pct:0.33,succ:1.0},notb:{req:109.3,asgn:9.7,pct:0.09,succ:0.73}},immersion:null},
+  "Sloat (Commodore) Elementary": {ge:{all:{req:460.0,asgn:68.3,pct:0.15,succ:0.83},esaa:{req:47.7,asgn:33.3,pct:0.7,succ:1.0},ctip1:{req:13.7,asgn:1.0,pct:0.07,succ:1.0},notb:{req:285.0,asgn:21.7,pct:0.08,succ:0.78}},immersion:null},
+  "Spring Valley Elementary": {ge:{all:{req:99.0,asgn:27.0,pct:0.27,succ:0.99},esaa:{req:7.0,asgn:4.7,pct:0.67,succ:1.0},ctip1:{req:0.7,asgn:0.0,pct:0.0,succ:1.0},notb:{req:58.0,asgn:19.0,pct:0.33,succ:1.0}},immersion:{all:{req:2.0,asgn:0.0,pct:0.0,succ:0.34},esaa:null,ctip1:{req:0.3,asgn:0.0,pct:0.0,succ:0.0},notb:{req:1.0,asgn:0.0,pct:0.0,succ:0.35}},immLabel:"Cantonese Immersion / Spanish Immersion"},
+  "Stevenson (Robert Louis) Elementary": {ge:{all:{req:500.7,asgn:59.7,pct:0.12,succ:0.8},esaa:{req:77.0,asgn:47.3,pct:0.61,succ:0.95},ctip1:null,notb:{req:285.0,asgn:3.3,pct:0.01,succ:0.76}},immersion:null},
+  "Sunnyside Elementary": {ge:{all:{req:375.3,asgn:67.3,pct:0.18,succ:0.82},esaa:{req:55.0,asgn:37.0,pct:0.67,succ:1.0},ctip1:{req:20.0,asgn:4.0,pct:0.2,succ:1.0},notb:{req:199.7,asgn:20.7,pct:0.1,succ:0.77}},immersion:null},
+  "Sunset Elementary": {ge:{all:{req:753.0,asgn:65.0,pct:0.09,succ:0.69},esaa:{req:57.0,asgn:49.3,pct:0.87,succ:0.94},ctip1:{req:25.7,asgn:5.7,pct:0.22,succ:1.0},notb:{req:467.7,asgn:2.3,pct:0.0,succ:0.66}},immersion:null},
+  "Sutro Elementary": {ge:{all:{req:302.3,asgn:20.7,pct:0.07,succ:0.85},esaa:{req:28.0,asgn:16.3,pct:0.58,succ:0.92},ctip1:null,notb:{req:183.7,asgn:2.3,pct:0.01,succ:0.83}},immersion:{all:{req:47.7,asgn:20.0,pct:0.42,succ:0.99},esaa:null,ctip1:{req:2.3,asgn:0.3,pct:0.14,succ:1.0},notb:{req:25.0,asgn:14.0,pct:0.56,succ:1.0}},immLabel:"Cantonese Immersion"},
+  "Taylor (Edward R.) Elementary": {ge:{all:{req:119.3,asgn:44.7,pct:0.37,succ:0.99},esaa:{req:28.0,asgn:13.0,pct:0.46,succ:1.0},ctip1:{req:1.3,asgn:0.0,pct:0.0,succ:0.5},notb:{req:41.7,asgn:20.7,pct:0.5,succ:0.96}},immersion:{all:{req:76.6,asgn:34.3,pct:0.45,succ:1.0},esaa:null,ctip1:{req:17.0,asgn:7.3,pct:0.43,succ:1.0},notb:{req:29.7,asgn:16.4,pct:0.55,succ:1.0}},immLabel:"Cantonese Immersion / Spanish Immersion"},
+  "Tenderloin Community": {ge:{all:{req:65.7,asgn:39.3,pct:0.6,succ:1.0},esaa:{req:21.0,asgn:16.0,pct:0.76,succ:1.0},ctip1:{req:0.3,asgn:0.3,pct:1.0,succ:1.0},notb:{req:25.3,asgn:16.3,pct:0.64,succ:1.0}},immersion:null},
+  "Ulloa Elementary": {ge:{all:{req:561.0,asgn:68.0,pct:0.12,succ:0.79},esaa:{req:62.0,asgn:44.3,pct:0.72,succ:0.99},ctip1:{req:19.7,asgn:0.3,pct:0.02,succ:1.0},notb:{req:322.0,asgn:16.3,pct:0.05,succ:0.73}},immersion:{all:{req:156.0,asgn:22.0,pct:0.14,succ:0.6},esaa:null,ctip1:{req:10.0,asgn:2.7,pct:0.27,succ:1.0},notb:{req:85.7,asgn:5.0,pct:0.06,succ:0.52}},immLabel:"Cantonese Immersion"},
+  "Visitacion Valley Elementary": {ge:{all:{req:67.3,asgn:26.7,pct:0.4,succ:0.93},esaa:{req:21.3,asgn:10.0,pct:0.47,succ:0.89},ctip1:{req:0.3,asgn:0.0,pct:0.0,succ:0.0},notb:{req:26.0,asgn:11.0,pct:0.42,succ:0.99}},immersion:{all:{req:12.0,asgn:3.7,pct:0.31,succ:0.81},esaa:null,ctip1:{req:2.0,asgn:0.3,pct:0.17,succ:0.33},notb:{req:7.3,asgn:2.3,pct:0.32,succ:0.91}},immLabel:"Cantonese Immersion"},
+  "Webster (Daniel) Elementary": {ge:{all:{req:141.7,asgn:24.0,pct:0.17,succ:0.85},esaa:{req:56.3,asgn:16.7,pct:0.3,succ:0.79},ctip1:{req:38.0,asgn:7.0,pct:0.18,succ:1.0},notb:{req:35.0,asgn:0.0,pct:0.0,succ:0.8}},immersion:{all:{req:173.7,asgn:41.3,pct:0.24,succ:0.8},esaa:null,ctip1:{req:48.7,asgn:13.0,pct:0.27,succ:1.0},notb:{req:78.3,asgn:19.4,pct:0.25,succ:0.68}},immLabel:"Spanish Immersion"},
+  "West Portal Elementary": {ge:{all:{req:622.3,asgn:63.7,pct:0.1,succ:0.81},esaa:{req:59.3,asgn:39.3,pct:0.66,succ:1.0},ctip1:{req:19.7,asgn:2.3,pct:0.12,succ:1.0},notb:{req:368.7,asgn:13.7,pct:0.04,succ:0.77}},immersion:{all:{req:360.7,asgn:33.0,pct:0.09,succ:0.69},esaa:null,ctip1:{req:17.0,asgn:2.3,pct:0.14,succ:1.0},notb:{req:224.0,asgn:15.6,pct:0.07,succ:0.65}},immLabel:"Cantonese Immersion"},
+  "Yick Wo Elementary": {ge:{all:{req:180.7,asgn:45.7,pct:0.25,succ:0.87},esaa:{req:33.7,asgn:24.3,pct:0.72,succ:1.0},ctip1:{req:8.7,asgn:1.0,pct:0.12,succ:1.0},notb:{req:100.3,asgn:16.0,pct:0.16,succ:0.79}},immersion:null},
+  "Yu (Alice Fong) Elementary": {ge:null,immersion:{all:{req:721.0,asgn:88.0,pct:0.12,succ:0.68},esaa:null,ctip1:{req:191.0,asgn:25.0,pct:0.13,succ:0.75},notb:{req:333.7,asgn:29.0,pct:0.09,succ:0.64}},immLabel:"Cantonese Immersion"},
+};
+
+// SFUSD TK Feeder system (SY 2026-27). Source: sfusd.edu/TKFeeder
+// feedsTo: [{name, type, area}] — EES/TK site feeds K at these elementary schools
+// onsite: school has its own TK that feeds K here; area: tiebreaker or "citywide"
+const tkFeeders = {
+  // EES/TK sites and the elementary schools they feed (each target has name, type, attendance area)
+  "Argonne Early Education School":            {feedsTo:[
+    {name:"Jefferson Elementary",             type:"GE",                area:"Jefferson"}
+  ]},
+  "Commodore Stockton Early Education School": {feedsTo:[
+    {name:"Chin (John Yehall) Elementary",    type:"GE",                area:"Chin"}
+  ]},
+  "McLaren (John) Early Education School":     {feedsTo:[
+    {name:"Cleveland Elementary",             type:"GE",                area:"Cleveland"},
+    {name:"Taylor (Edward R.) Elementary",    type:"GE",                area:"Taylor"},
+    {name:"Buena Vista/ Horace Mann K-8",     type:"Spanish Immersion", area:"citywide"}
+  ]},
+  "Mission Education Center":                  {feedsTo:[
+    {name:"Alvarado Elementary",              type:"Spanish Immersion", area:"citywide"},
+    {name:"Huerta (Dolores) Elementary",      type:"Spanish Immersion", area:"citywide"},
+    {name:"Marshall Elementary",              type:"Spanish Immersion", area:"citywide"}
+  ]},
+  "Noriega Early Education School":            {feedsTo:[
+    {name:"Sunset Elementary",                type:"GE",                area:"Sunset"},
+    {name:"Ulloa Elementary",                 type:"GE",                area:"Ulloa"}
+  ]},
+  "Rodriguez (Zaida) Early Education School":  {feedsTo:[
+    {name:"Webster (Daniel) Elementary",      type:"Spanish Immersion", area:"citywide"}
+  ]},
+  "San Miguel Early Education School":         {feedsTo:[
+    {name:"Sloat (Commodore) Elementary",     type:"GE",                area:"Sloat"},
+    {name:"Sunnyside Elementary",             type:"GE",                area:"Sunnyside"}
+  ]},
+  "J. Serra Annex Early Education School":     {feedsTo:[
+    {name:"Glen Park Elementary",             type:"GE",                area:"Glen Park"},
+    {name:"Monroe Elementary",               type:"GE",                area:"Monroe"}
+  ]},
+  "Tule Elk Park Early Education School":      {feedsTo:[
+    {name:"New Traditions Elementary",        type:"GE",                area:"New Traditions"},
+    {name:"Peabody (George) Elementary",      type:"GE",                area:"Peabody"},
+    {name:"Yick Wo Elementary",               type:"GE",                area:"Yick Wo"},
+    {name:"Lilienthal (Claire) Elementary",   type:"GE",                area:"citywide"}
+  ]},
+  // Schools with confirmed on-site TK programs (per SFUSD table notes)
+  "Alvarado Elementary":           {onsite:"GE",                area:"Alvarado"},
+  "Huerta (Dolores) Elementary":   {onsite:"Spanish Immersion", area:"citywide"},
+  "Taylor (Edward R.) Elementary": {onsite:"GE",                area:"Taylor"},
+};
+
+const tuition = {
+  "Adda Clevenger School": 25340,
+  "Alta Vista School": 43989,
+  "Archbishop Riordan High School": 32200,
+  "Brightworks School": 43895,
+  "Cathedral School for Boys": 49500,
+  "Children's Day School": 47800,
+  "Chinese American International School- 19th Ave Campus": 44300,
+  "Convent & Stuart Hall, Schools of the Sacred Heart - San Francisco": 60220,
+  "Cornerstone Academy-Silver Campus": 21500,
+  "Cornerstone Academy\u2013Cambridge Campus": 21500,
+  "Drew School": 64200,
+  "Ecole Notre Dame Des Victoires": 20000,
+  "Eureka Learning Center": 21350,
+  "Fusion Academy San Francisco": 76725,
+  "Hillwood Academic Day": 18000,
+  "Holy Name Elementary": 10340,
+  "Jewish Community High School of the Bay": 65050,
+  "KZV Armenian School": 16610,
+  "Kahlon Family Services School": 45600,
+  "Katherine Delmar Burke School": 48580,
+  "Katherine Michiels School": 30000,
+  "Kittredge School": 28500,
+  "La Scuola International School": 48150,
+  "Lakeside Presbyterian Center for Children": 18419,
+  "Lycee Francais de San Francisco (Ashbury)": 45900,
+  "Lycee Francais de San Francisco (Ortega)": 45900,
+  "Lick-Wilmerding High School": 62250,
+  "Live Oak School": 46725,
+  "Mission Dolores Academy": 5125,
+  "Nomad": 41800,
+  "Our Lady of the Visitacion Elementary": 8400,
+  "Presidio Hill School": 44625,
+  "Presidio Knolls School": 48447,
+  "Sacred Heart Cathedral Preparatory": 31250,
+  "Saint Brigid Academy": 20950,
+  "Saint Monica School": 11900,
+  "San Francisco Adventist School": 9190,
+  "San Francisco Christian School": 16122,
+  "San Francisco Day School": 48777,
+  "San Francisco Friends School": 47775,
+  "San Francisco High School of the Arts": 42700,
+  "San Francisco School, The": 45800,
+  "San Francisco Schoolhouse": 22020,
+  "San Francisco University High School": 66455,
+  "San Francisco Waldorf School": 58200,
+  "School of the Epiphany": 9850,
+  "St James School": 10186,
+  "St. Anne School": 17650,
+  "St. Anthony\u2013Immaculate Conception": 6900,
+  "St. Brendan Elementary": 12675,
+  "St. Cecilia Elementary": 10620,
+  "St. Finn Barr Catholic School": 11150,
+  "St. Gabriel Elementary School": 12294,
+  "St. Ignatius College Preparatory": 34600,
+  "St. John the Evangelist": 11498,
+  "St. Paul's": 11150,
+  "St. Peter's School": 11710,
+  "St. Philip School": 11540,
+  "St. Stephen School": 10345,
+  "St. Thomas More": 11275,
+  "St. Vincent de Paul School": 16750,
+  "Sterne School": 51000,
+  "Stratford School": 28340,
+  "Stratford School San Francisco": 28340,
+  "Sts. Peter and Paul Elementary": 18175,
+  "Synergy School": 32340,
+  "The Bay School of San Francisco": 67211,
+  "The Brandeis School of San Francisco": 46615,
+  "The Hamlin School": 47275,
+  "The International School of San Francisco": 60020,
+  "Town School for Boys": 49050,
+  "Urban School of San Francisco": 65044,
+  "West Portal Lutheran School": 10486,
+  "Zion Lutheran School": 13750
+};
+
+// Catholic/parochial school enrichment data. Source: SF Catholic Schools.xlsx
+const catholicExtras = {
+  "De Marillac Academy": {
+    enrichment: "Computer programming, robotics, public speaking, theater, chess",
+    afterSchool: "CYO athletics (volleyball, basketball); extended day/year program"
+  },
+  "Ecole Notre Dame Des Victoires": {
+    lang: "French (daily, native French-speaking teachers)",
+    langStart: "Transitional Kindergarten",
+    enrichment: "Art, technology, music",
+    afterSchool: "NDVEP after-school program (until 6pm); clubs; sports"
+  },
+  "School of the Epiphany": {
+    lang: "Spanish",
+    langStart: "Kindergarten",
+    afterSchool: "Extended Care; CYO athletics"
+  },
+  "Holy Name Elementary": {
+    lang: "Spanish or Mandarin (choice)",
+    langStart: "Kindergarten (K–4: 2×/wk 30 min; Gr 5–8: 1×/wk 50 min)",
+    enrichment: "Art, music, PE, technology, library",
+    afterSchool: "Opera Together, Walk Through History, Mobile Dairy, STEM Try-It Truck; Spring Musical"
+  },
+  "St. Anne School": {
+    lang: "Foreign language (after-school only)",
+    afterSchool: "Before school care (7am); tennis, chess, instrumental band, theater (Kid Stock), art, piano, choir, robotics, foreign language; CYO sports"
+  },
+  "St. Anthony–Immaculate Conception": {
+    enrichment: "Performing Arts (Kid Stock; musicals), cooking, PE, Art in Action, technology; 1:1 iPads (BLENDed Learning)"
+  },
+  "St. Brendan Elementary": {
+    afterSchool: "Electivity classes: Chess (all grades), Advanced STEM with LEGOs (K–3), Algebra and Beyond (Gr 7–8)"
+  },
+  "Saint Brigid Academy": {
+    enrichment: "Micro-school for neurodivergent/gifted students"
+  },
+  "St. Cecilia Elementary": {
+    lang: "Spanish",
+    enrichment: "Art, student choir, science fair, student council, eco club, faith families",
+    afterSchool: "Fall/Spring enrichment; extended care; Winter Musical; talent show; service projects"
+  },
+  "St. Finn Barr Catholic School": {
+    lang: "Spanish",
+    enrichment: "Art, student choir, science fair, student council, eco club, faith families",
+    afterSchool: "Fall/Spring enrichment; extended care; Winter Musical; talent show; service projects"
+  },
+  "St. Gabriel Elementary School": {
+    lang: "Spanish",
+    langStart: "Kindergarten (K–2: songs/stories; Gr 3–5: grammar; Gr 6–8: verb conjugation)",
+    enrichment: "Fine arts, music, PE, science discovery lab",
+    afterSchool: "Language & Arts: Mandarin, chess, piano, drawing"
+  },
+  "St James School": {
+    lang: "Spanish",
+    langStart: "All grades (beginning / intermediate / advanced levels)",
+    afterSchool: "Kid Stock drama/performing arts (Winter & Spring performances)"
+  },
+  "St. John the Evangelist": {
+    lang: "Spanish (weekly)",
+    langStart: "1st grade",
+    enrichment: "Art & music (weekly), STEM/Robotics",
+    afterSchool: "Guitar, STEM/Robotics, KidStock (occasional), tutoring (2×/week)"
+  },
+  "Saint Monica School": {
+    enrichment: "Art, STEAM (engineering, robotics, 3D printing, technology)",
+    afterSchool: "Academic Chess, Band, Drama Club, Lego Robotics & Coding Club, STEM Club, Student Council, Yearbook; CYO athletics (Gr 3+)"
+  },
+  "St. Paul's": {
+    afterSchool: "Hip hop dance, chess, Lego engineering, ukulele, coding, performing arts, cooking, yearbook; field trips"
+  },
+  "St. Peter's School": {
+    lang: "Spanish–English Dual Language Immersion (50/50)",
+    langStart: "Kindergarten",
+    afterSchool: "BVCC: homework help, performing arts, cooking, sports, Spanish, visual arts, STEM, music/dance"
+  },
+  "St. Philip School": {
+    lang: "Spanish (K–8, during school); French & ASL (after school)",
+    langStart: "Kindergarten (Spanish)",
+    enrichment: "Spanish, PE, technology, music, arts",
+    afterSchool: "Art, Lego Robotics, band, French, chess, ASL; Extended Care (until 5:30pm Mon–Thu, 4pm Fri)"
+  },
+  "St. Stephen School": {
+    lang: "Spanish",
+    langStart: "Kindergarten (all grades)",
+    enrichment: "PE, technology, music, Art in Action",
+    afterSchool: "Teacher support in technology & math"
+  },
+  "St. Thomas More": {
+    enrichment: "Robotics Club, Academic Chess, Music Matters, Student Council, Performing Arts (Holiday Concert & Spring Musical)",
+    afterSchool: "CYO Sports (Gr 3–8); Extended Care"
+  },
+  "St. Vincent de Paul School": {
+    lang: "Italian (K–4); Spanish available Gr 5–8",
+    langStart: "Kindergarten (Italian 1×/wk 40 min; Spanish 3×/wk Gr 5–8)",
+    enrichment: "Italian, music, art, drama (Gr 1–8), PE, technology",
+    afterSchool: "Theatrical performances 2×/year"
+  },
+  "Sts. Peter and Paul Elementary": {
+    lang: "Spanish and Italian",
+    langStart: "Pre-K (extracurricular); Kindergarten (in curriculum)",
+    enrichment: "Art, music, coding/robotics/technology; SF Opera programs (K–3, Gr 5)",
+    afterSchool: "Newspaper Club, Marian Club, St. John Bosco Club, Dance, CYO Athletics (Gr 3–5)"
+  },
+  "Stella Maris Academy": {
+    lang: "Latin (classical education model, K–8)",
+    langStart: "Integrated into curriculum K–8",
+    enrichment: "Art, singing, Latin, instruments: recorder (Gr 3–4), violin (Gr 5–6), handbells (Gr 7–8)",
+    afterSchool: "Choir School partnership with Saint Mary's Cathedral Choir School"
+  },
+};
+
+// Elementary → Middle school feeder assignments. Source: SFUSD feeder patterns.
+// K-8 schools (Alice Fong Yu, BV/HM, Carmichael, Lawton, Lilienthal, Paul Revere, Rooftop) are excluded.
+const msFeeder = {
+  // Brown Jr. (Willie L) Middle — Bayview/HP
+  "Carver (George Washington) Elementary":      "Brown Jr. (Willie L) Middle",
+  "Drew (Charles) College Preparatory Academy": "Brown Jr. (Willie L) Middle",
+  "Harte (Bret) Elementary":                    "Brown Jr. (Willie L) Middle",
+  "Malcolm X Academy":                          "Brown Jr. (Willie L) Middle",
+  // Aptos Middle — SW SF
+  "Feinstein (Dianne) Elementary":              "Aptos Middle",
+  "King (Thomas Starr) Elementary":             "Aptos Middle",
+  "Ortega (Jose) Elementary":                   "Aptos Middle",
+  "Sloat (Commodore) Elementary":               "Aptos Middle",
+  // Denman (James) Middle — Excelsior/Outer Mission
+  "Lakeshore Alternative Elementary":           "Denman (James) Middle",
+  "Longfellow Elementary":                      "Denman (James) Middle",
+  "Miraloma Elementary":                        "Denman (James) Middle",
+  "Sheridan Elementary":                        "Denman (James) Middle",
+  "Sunnyside Elementary":                       "Denman (James) Middle",
+  // Everett Middle — Mission
+  "Chavez (Cesar) Elementary":                  "Everett Middle",
+  "Marshall Elementary":                        "Everett Middle",
+  "McKinley Elementary":                        "Everett Middle",
+  "Milk (Harvey) Civil Rights Elementary":      "Everett Middle",
+  "Sanchez Elementary":                         "Everett Middle",
+  // Francisco Middle — Chinatown/North Beach
+  "Chin (John Yehall) Elementary":              "Francisco Middle",
+  "Garfield Elementary":                        "Francisco Middle",
+  "Parker (Jean) Elementary":                   "Francisco Middle",
+  "Tenderloin Community":                       "Francisco Middle",
+  "Yick Wo Elementary":                         "Francisco Middle",
+  // Giannini (A.P.) Middle — Outer Sunset
+  "Grattan Elementary":                         "Giannini (A.P.) Middle",
+  "Jefferson Elementary":                       "Giannini (A.P.) Middle",
+  "Key (Francis Scott) Elementary":             "Giannini (A.P.) Middle",
+  "Stevenson (Robert Louis) Elementary":        "Giannini (A.P.) Middle",
+  "Sunset Elementary":                          "Giannini (A.P.) Middle",
+  // Hoover (Herbert) Middle — West/Inner Sunset
+  "Monroe Elementary":                          "Hoover (Herbert) Middle",
+  "Moscone (George) Elementary":                "Hoover (Herbert) Middle",
+  "Serra (Junipero) Elementary":                "Hoover (Herbert) Middle",
+  "Ulloa Elementary":                           "Hoover (Herbert) Middle",
+  "West Portal Elementary":                     "Hoover (Herbert) Middle",
+  // King Jr. (Martin Luther) Academic Middle — Portola/Excelsior
+  "Hillcrest Elementary":                       "King Jr. (Martin Luther) Academic Middle",
+  "Taylor (Edward R.) Elementary":              "King Jr. (Martin Luther) Academic Middle",
+  // Lick (James) Middle — Mission/Noe Valley
+  "Alvarado Elementary":                        "Lick (James) Middle",
+  "Flynn (Leonard R.) Elementary":              "Lick (James) Middle",
+  "Glen Park Elementary":                       "Lick (James) Middle",
+  "Mission Education Center":                   "Lick (James) Middle",
+  "Muir (John) Elementary":                     "Lick (James) Middle",
+  // Marina Middle — Marina/Pacific Heights
+  "Lau (Gordon J.) Elementary":                 "Marina Middle",
+  "San Francisco Public Montessori":            "Marina Middle",
+  "Redding Elementary":                         "Marina Middle",
+  "Sherman Elementary":                         "Marina Middle",
+  "Spring Valley Elementary":                   "Marina Middle",
+  // Presidio Middle — Richmond
+  "Alamo Elementary":                           "Presidio Middle",
+  "Argonne Elementary":                         "Presidio Middle",
+  "Clarendon Alternative Elementary":           "Presidio Middle",
+  "Lafayette Elementary":                       "Presidio Middle",
+  "Parks (Rosa) Elementary":                    "Presidio Middle",
+  // Roosevelt Middle — Inner Sunset/Richmond
+  "Chinese Immersion School at DeAvila":        "Roosevelt Middle",
+  "Cobb (William L.) Elementary":               "Roosevelt Middle",
+  "McCoppin (Frank) Elementary":                "Roosevelt Middle",
+  "New Traditions Elementary":                  "Roosevelt Middle",
+  "Peabody (George) Elementary":               "Roosevelt Middle",
+  "Sutro Elementary":                           "Roosevelt Middle",
+  // Visitacion Valley Middle — Vis Valley/Excelsior
+  "Cleveland Elementary":                       "Visitacion Valley Middle",
+  "El Dorado Elementary":                       "Visitacion Valley Middle",
+  "Guadalupe Elementary":                       "Visitacion Valley Middle",
+  "Visitacion Valley Elementary":               "Visitacion Valley Middle",
+};
+
+// Elementary school bell schedules (2025-26). Source: sfusd.edu/schools/enroll/resources/school-start-and-end-times-2025-26
+// Value is start time key; full schedule derived via BELL_SCHEDULES
+const schoolHours = {
+  "Alamo Elementary":                           "7:50",
+  "Alvarado Elementary":                        "7:50",
+  "Argonne Elementary":                         "7:50",
+  "Bryant Elementary":                          "7:50",
+  "Carver (George Washington) Elementary":      "8:40",
+  "Chavez (Cesar) Elementary":                  "8:40",
+  "Chin (John Yehall) Elementary":              "9:30",
+  "Chinese Immersion School at DeAvila":        "8:40",
+  "Clarendon Alternative Elementary":           "9:30",
+  "Cleveland Elementary":                       "9:30",
+  "Cobb (William L.) Elementary":               "8:40",
+  "Drew (Charles) College Preparatory Academy": "7:50",
+  "El Dorado Elementary":                       "7:50",
+  "Feinstein (Dianne) Elementary":              "7:50",
+  "Flynn (Leonard R.) Elementary":              "7:50",
+  "Garfield Elementary":                        "7:50",
+  "Glen Park Elementary":                       "8:40",
+  "Grattan Elementary":                         "7:50",
+  "Guadalupe Elementary":                       "8:40",
+  "Harte (Bret) Elementary":                    "8:40",
+  "Hillcrest Elementary":                       "7:50",
+  "Huerta (Dolores) Elementary":                "8:40",
+  "Jefferson Elementary":                       "7:50",
+  "Key (Francis Scott) Elementary":             "7:50",
+  "King (Thomas Starr) Elementary":             "7:50",
+  "Lafayette Elementary":                       "7:50",
+  "Lakeshore Alternative Elementary":           "9:30",
+  "Lau (Gordon J.) Elementary":                 "8:40",
+  "Lee (Edwin and Anita) Newcomer":             "8:40",
+  "Longfellow Elementary":                      "9:30",
+  "Malcolm X Academy":                          "8:40",
+  "Marshall Elementary":                        "8:40",
+  "McCoppin (Frank) Elementary":                "9:30",
+  "McKinley Elementary":                        "7:50",
+  "Milk (Harvey) Civil Rights Elementary":      "9:30",
+  "Miraloma Elementary":                        "7:50",
+  "Mission Education Center":                   "8:40",
+  "Monroe Elementary":                          "8:40",
+  "Moscone (George R.) Elementary":             "8:40",
+  "Muir (John) Elementary":                     "8:40",
+  "New Traditions Elementary":                  "9:30",
+  "Ortega (Jose) Elementary":                   "7:50",
+  "Parker (Jean) Elementary":                   "8:40",
+  "Parks (Rosa) Elementary":                    "7:50",
+  "Peabody (George) Elementary":                "7:50",
+  "Redding Elementary":                         "8:40",
+  "San Francisco Public Montessori":            "8:40",
+  "Sanchez Elementary":                         "7:50",
+  "Serra (Junipero) Elementary":                "9:30",
+  "Sheridan Elementary":                        "7:50",
+  "Sherman Elementary":                         "7:50",
+  "Sloat (Commodore) Elementary":               "8:40",
+  "Spring Valley Elementary":                   "8:40",
+  "Stevenson (Robert Louis) Elementary":        "7:50",
+  "Sunnyside Elementary":                       "9:30",
+  "Sunset Elementary":                          "9:30",
+  "Sutro Elementary":                           "9:30",
+  "Taylor (Edward R.) Elementary":              "7:50",
+  "Tenderloin Community":                       "8:40",
+  "Ulloa Elementary":                           "9:30",
+  "Visitacion Valley Elementary":               "8:40",
+  "Webster (Daniel) Elementary":                "7:50",
+  "West Portal Elementary":                     "7:50",
+  "Yick Wo Elementary":                         "9:30",
+};
+const BELL_SCHEDULES = {
+  "7:50": {h:"7:50AM–2:05PM", wed:"7:50AM–12:50PM"},
+  "8:40": {h:"8:40AM–2:55PM", wed:"8:40AM–1:40PM"},
+  "9:30": {h:"9:30AM–3:45PM", wed:"9:30AM–2:30PM"},
+};
+
+// After-school / OST / CBO partner programs. Source: SFUSD ExCEL CBO Partner Programs.xlsx
+// Only schools with specific name matches in the "Schools Served" column are included
+const cboPrograms = {
+  // Bay Area Community Resources (BACR)
+  "Guadalupe Elementary":                      [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Harte (Bret) Elementary":                   [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Key (Francis Scott) Elementary":            [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Lakeshore Alternative Elementary":          [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Lawton Alternative":                        [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Mission Education Center":                  [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Revere (Paul) Elementary":                  [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Serra (Junipero) Elementary":               [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Sherman Elementary":                        [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Stevenson (Robert Louis) Elementary":       [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Sunset Elementary":                         [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Taylor (Edward R.) Elementary":             [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  "Ulloa Elementary":                          [{name:"Bay Area Community Resources", url:"https://www.bacr.org", desc:"After-school academic support, enrichment, and youth development"}],
+  // Buchanan YMCA
+  "Chinese Immersion School at DeAvila":       [{name:"Buchanan YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Cobb (William L.) Elementary":              [{name:"Buchanan YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Muir (John) Elementary":                    [{name:"Buchanan YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "New Traditions Elementary":                 [{name:"Buchanan YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Parks (Rosa) Elementary":                   [{name:"Buchanan YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  // Chinatown YMCA
+  "Chin (John Yehall) Elementary":             [{name:"Chinatown YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Lau (Gordon J.) Elementary":                [{name:"Chinatown YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Lee (Edwin and Anita) Newcomer":            [{name:"Chinatown YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Parker (Jean) Elementary":                  [{name:"Chinatown YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Spring Valley Elementary":                  [{name:"Chinatown YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Yick Wo Elementary":                        [{name:"Chinatown YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  // Richmond District YMCA
+  "Jefferson Elementary":                      [{name:"Richmond District YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Lilienthal (Claire) Elementary":            [{name:"Richmond District YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Sutro Elementary":                          [{name:"Richmond District YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  // Mission YMCA
+  "Hillcrest Elementary":                      [{name:"Mission YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Huerta (Dolores) Elementary":               [{name:"Mission YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Milk (Harvey) Civil Rights Elementary":     [{name:"Mission YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Monroe Elementary":                         [{name:"Mission YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Sunnyside Elementary":                      [{name:"Mission YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  // Stonestown Family YMCA
+  "Miraloma Elementary":                       [{name:"Stonestown Family YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Ortega (Jose) Elementary":                  [{name:"Stonestown Family YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Sheridan Elementary":                       [{name:"Stonestown Family YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "Sloat (Commodore) Elementary":              [{name:"Stonestown Family YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "West Portal Elementary":                    [{name:"Stonestown Family YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  // Urban Services YMCA
+  "Drew (Charles) College Preparatory Academy":[{name:"Urban Services YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  "King (Thomas Starr) Elementary":            [{name:"Urban Services YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  // Shih Yu-Lang Central YMCA
+  "Tenderloin Community":                      [{name:"Shih Yu-Lang Central YMCA", url:"https://www.ymcasf.org", desc:"After-school academic support, enrichment, and recreation"}],
+  // Boys & Girls Club of SF
+  "Carver (George Washington) Elementary":     [{name:"Boys & Girls Club of SF", url:"https://www.bgcsf.org", hours:"M–F dismissal–6PM", desc:"Academic support, enrichment, and after-school programming"}],
+  "Malcolm X Academy":                         [{name:"Boys & Girls Club of SF", url:"https://www.bgcsf.org", hours:"M–F dismissal–6PM", desc:"Academic support, enrichment, and after-school programming"}],
+  // Richmond Neighborhood Center
+  "Alamo Elementary":                          [{name:"Richmond Neighborhood Center", url:"https://richmondsf.org", hours:"M–F 2:05–6:00PM", desc:"Academic support, enrichment, and recreation"}],
+  "Argonne Elementary":                        [{name:"Richmond Neighborhood Center", url:"https://richmondsf.org", hours:"M–F 2:05–6:00PM", desc:"Academic support, enrichment, and recreation"}],
+  "Lafayette Elementary":                      [{name:"Richmond Neighborhood Center", url:"https://richmondsf.org", hours:"M–F 2:05–6:00PM", desc:"Academic support, enrichment, and recreation"}],
+  "McCoppin (Frank) Elementary":               [{name:"Richmond Neighborhood Center", url:"https://richmondsf.org", hours:"M–F 2:05–6:00PM", desc:"Academic support, enrichment, and recreation"}],
+  "Peabody (George) Elementary":               [{name:"Richmond Neighborhood Center", url:"https://richmondsf.org", hours:"M–F 2:05–6:00PM", desc:"Academic support, enrichment, and recreation"}],
+  "San Francisco Public Montessori":           [{name:"Richmond Neighborhood Center", url:"https://richmondsf.org", hours:"M–F 2:05–6:00PM", desc:"Academic support, enrichment, and recreation"}],
+  // Mission Graduates
+  "Alvarado Elementary":                       [{name:"Mission Graduates", url:"https://www.missiongraduates.org/after-school-programs/", hours:"M–F school dismissal–6PM", desc:"Homework help, enrichment, and college-readiness programming"}],
+  "Carmichael (Bessie)/FEC":                   [{name:"Mission Graduates", url:"https://www.missiongraduates.org/after-school-programs/", hours:"M–F school dismissal–6PM", desc:"Homework help, enrichment, and college-readiness programming"}],
+  "Bryant Elementary":                         [{name:"Mission Graduates", url:"https://www.missiongraduates.org/after-school-programs/", hours:"M–F school dismissal–6PM", desc:"Homework help, enrichment, and college-readiness programming"}],
+  "Cleveland Elementary":                      [{name:"Mission Graduates", url:"https://www.missiongraduates.org/after-school-programs/", hours:"M–F school dismissal–6PM", desc:"Homework help, enrichment, and college-readiness programming"}],
+  "Flynn (Leonard R.) Elementary":             [{name:"Mission Graduates", url:"https://www.missiongraduates.org/after-school-programs/", hours:"M–F school dismissal–6PM", desc:"Homework help, enrichment, and college-readiness programming"}],
+  "Marshall Elementary":                       [{name:"Mission Graduates", url:"https://www.missiongraduates.org/after-school-programs/", hours:"M–F school dismissal–6PM", desc:"Homework help, enrichment, and college-readiness programming"}],
+  "Sanchez Elementary":                        [{name:"Mission Graduates", url:"https://www.missiongraduates.org/after-school-programs/", hours:"M–F school dismissal–6PM", desc:"Homework help, enrichment, and college-readiness programming"}],
+  // Jamestown Community Center
+  "Buena Vista/ Horace Mann K-8":              [{name:"Jamestown Community Center", url:"https://www.jamestownsf.org/afterschool-and-beacons", hours:"3:45–6:45PM", desc:"Academic support, enrichment, youth development"}],
+  "Chavez (Cesar) Elementary":                 [{name:"Jamestown Community Center", url:"https://www.jamestownsf.org/afterschool-and-beacons", hours:"3:00–6:00PM", desc:"Academic support, enrichment, youth development"}],
+  "Longfellow Elementary":                     [{name:"Jamestown Community Center", url:"https://www.jamestownsf.org/afterschool-and-beacons", hours:"3:00–6:00PM", desc:"Academic support, enrichment, youth development"}],
+  // Clarendon Childcare Center
+  "Clarendon Alternative Elementary":          [{name:"Clarendon Childcare Center", url:"https://www.clarendonchildcarecenter.net", hours:"M–F dismissal–6PM", desc:"Licensed childcare/afterschool program"}],
+  // After School Enrichment Program (ASEP)
+  "McKinley Elementary":                       [{name:"After School Enrichment Program (ASEP)", url:"https://www.sfusd.edu/school/mckinley-elementary-school", hours:"M–F ~3:00–6:00PM", desc:"Theme-based learning, homework help, arts enrichment, PlaySEP; Clubs: art, science, soccer, chess, Lego; Mandarin Language Program K–5; Lunch Time Wellness"}],
+  "Webster (Daniel) Elementary":               [{name:"After School Enrichment Program (ASEP)", url:"https://www.sfusd.edu/school/mckinley-elementary-school", hours:"M–F ~3:00–6:00PM", desc:"Theme-based learning, homework help, arts enrichment, PlaySEP; Clubs: art, science, soccer, chess, Lego; Mandarin Language Program K–5; Lunch Time Wellness"}],
+  // Community Youth Center (CYC)
+  "Feinstein (Dianne) Elementary":             [{name:"CYC – A Youth Service", url:"https://www.cycsf.org", hours:"1:50–6:00PM", desc:"Academic support, enrichment, and youth development"}],
+  "Garfield Elementary":                       [{name:"CYC – A Youth Service", url:"https://www.cycsf.org", hours:"1:50–6:00PM", desc:"Academic support, enrichment, and youth development"}],
+  "Moscone (George) Elementary":               [{name:"CYC – A Youth Service", url:"https://www.cycsf.org", hours:"1:50–6:00PM", desc:"Academic support, enrichment, and youth development"}],
+  "Redding Elementary":                        [{name:"CYC – A Youth Service", url:"https://www.cycsf.org", hours:"2:30–6:00PM", desc:"Academic support, enrichment, and youth development"}],
+  // ROCK Beacon (Real Options for City Kids)
+  "El Dorado Elementary":                      [{name:"ROCK Beacon (Real Options for City Kids)", url:"https://rocksf.org", hours:"M–F dismissal–7PM", desc:"Sports/fitness, academic support, enrichment, community service, outdoor adventures, leadership training"}],
+  "Visitacion Valley Elementary":              [{name:"ROCK Beacon (Real Options for City Kids)", url:"https://rocksf.org", hours:"M–F dismissal–7PM", desc:"Sports/fitness, academic support, enrichment, community service, outdoor adventures, leadership training"}],
+  // SFArtsEd
+  "Glen Park Elementary":                      [{name:"SFArtsEd – Big Blue After School", url:"https://www.sfartsed.org", hours:"M–F dismissal–6PM", desc:"Arts-integrated learning and enrichment, academic support, physical recreation"}],
+  // Grattan ASP (GASP)
+  "Grattan Elementary":                        [{name:"Grattan ASP (GASP)", url:"https://www.gasp-grattan.org", hours:"M/Tu/Th/F dismissal–6PM", desc:"Homework Time 20–30 min daily Mon–Thu, Academic Club (small-group tutoring by Grattan teachers), general enrichment"}],
+  // Wah Mei School
+  "Yu (Alice Fong) Elementary":                [{name:"Wah Mei School – BASE!", url:"https://www.wahmei.org", hours:"M/Tu/Th/F 3:45–6:30PM, W 2:30–6:30PM", desc:"Dual-language (Cantonese/Mandarin) homework support, thematic enrichment, outcomes-based programming"}],
+  // CASA
+  "Rooftop Elementary":                        [{name:"CASA (Children's After School Arts)", url:"https://www.sfusd.edu/school/rooftop-school", hours:"M–F dismissal–6:30PM", desc:"Creative and performing arts, social justice emphasis, social-emotional learning; TK–6th grade"}],
+};
+
+// Pre-K hours of operation. Source: sfusd.edu/early-education/pre-kindergarten/list-preschool-choices
+// h = regular hours (Mon/Tue/Thu/Fri); wed = Wednesday hours when different
+const preKHours = {
+  "Argonne Early Education School":              {h:"7:30AM–5:30PM"},
+  "Carmichael (Bessie)/FEC":                     {h:"9:30AM–3:35PM", wed:"9:30AM–2:30PM"},
+  "Cobb (William L.) Elementary":                {h:"8:40AM–2:55PM", wed:"8:40AM–1:40PM"},
+  "Commodore Stockton Early Education School":   {h:"7:45AM–5:45PM"},
+  "Drew (Charles) College Preparatory Academy":  {h:"7:30AM–5:30PM"},
+  "Grattan Elementary":                          {h:"7:45AM–5:45PM"},
+  "Guadalupe Elementary":                        {h:"7:30AM–5:30PM"},
+  "Harte (Bret) Elementary":                     {h:"7:45AM–5:45PM"},
+  "J. Serra Annex Early Education School":       {h:"7:30AM–5:30PM"},
+  "Jefferson Early Education School":            {h:"8:00AM–5:30PM"},
+  "Las Americas Early Education School":         {h:"7:30AM–5:30PM"},
+  "Leola Havard Early Education School":         {h:"7:45AM–5:45PM"},
+  "McLaren (John) Early Education School":       {h:"7:30AM–5:30PM"},
+  "Mission Bay Early Education School":          {h:"7:50AM–2:05PM", wed:"7:50AM–12:50PM"},
+  "Mission Education Center":                    {h:"7:30AM–5:30PM"},
+  "Muir (John) Elementary":                      {h:"8:40AM–2:55PM", wed:"8:40AM–1:40PM"},
+  "Noriega Early Education School":              {h:"8:00AM–6:00PM"},
+  "Ortega (Jose) Elementary":                    {h:"7:50AM–2:05PM", wed:"7:50AM–12:50PM"},
+  "Raphael Weill Early Education School":        {h:"7:30AM–5:30PM"},
+  "Rodriguez (Zaida) Early Education School":    {h:"7:30AM–5:30PM"},
+  "San Francisco Public Montessori":             {h:"7:45AM–5:45PM"},
+  "San Miguel Early Education School":           {h:"7:45AM–5:45PM"},
+  "Sheridan Elementary":                         {h:"7:50AM–2:05PM", wed:"7:50AM–12:50PM"},
+  "Taylor (Edward R.) Elementary":               {h:"7:50AM–2:05PM", wed:"7:50AM–2:50PM"},
+  "Tenderloin Early Education School":           {h:"8:40AM–2:55PM", wed:"8:40AM–1:40PM"},
+  "Theresa Mahler Early Education School":       {h:"7:30AM–5:30PM"},
+  "Tule Elk Park Early Education School":        {h:"7:30AM–5:30PM"},
+};
+
+const allSchools = [...privateSchools, ...schools];
+
+const COLORS = {
+  preschool:  '#6a1b9a',
+  elementary: '#2e7d32',
+  k8:         '#00838f',
+  middle:     '#e65100',
+  high:       '#c62828',
+  k12:        '#37474f',
+  other:      '#546e7a'
+};
+
+const LEVEL_LABELS = {
+  preschool:  'Preschool / Pre-K',
+  elementary: 'Elementary',
+  k8:         'K–8',
+  middle:     'Middle School',
+  high:       'High School',
+  k12:        'K–12',
+  other:      'Other'
+};
+
+function makeIcon(school) {
+  const size = 16;
+  const color = COLORS[school.level] || COLORS.other;  // level color applies to ALL schools
+  let html;
+  if (school.type === 'independent') {
+    html = `<div style="background:${color};width:${size}px;height:${size}px;border-radius:2px;border:2.5px solid rgba(255,255,255,0.95);box-shadow:0 2px 6px rgba(0,0,0,0.5),0 0 0 1px rgba(0,0,0,0.15)"></div>`;
+  } else if (school.type === 'parochial') {
+    html = `<div style="width:0;height:0;border-left:${size/2+1}px solid transparent;border-right:${size/2+1}px solid transparent;border-bottom:${size+4}px solid ${color};filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5))"></div>`;
+  } else if (school.type === 'charter') {
+    html = `<div style="background:${color};width:${size-2}px;height:${size-2}px;border-radius:2px;transform:rotate(45deg);border:2.5px solid rgba(255,255,255,0.95);box-shadow:0 2px 6px rgba(0,0,0,0.5),0 0 0 1px rgba(0,0,0,0.15)"></div>`;
+  } else {
+    html = `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2.5px solid rgba(255,255,255,0.95);box-shadow:0 2px 6px rgba(0,0,0,0.5),0 0 0 1px rgba(0,0,0,0.15)"></div>`;
+  }
+  return L.divIcon({
+    className: '',
+    html,
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2],
+    popupAnchor: [0, -size/2 - 2]
+  });
+}
+
+const map = L.map('map').setView([37.758, -122.443], 12);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 19
+}).addTo(map);
+
+const TUITION_RANGE_MAX = 80000;
+const tuitionMinEl = document.getElementById('tuition-min');
+const tuitionMaxEl = document.getElementById('tuition-max');
+const tuitionFillEl = document.getElementById('tuition-fill');
+const tuitionMinLabel = document.getElementById('tuition-min-label');
+const tuitionMaxLabel = document.getElementById('tuition-max-label');
+
+function fmtTuition(v) {
+  if (v === 0) return '$0';
+  if (v >= TUITION_RANGE_MAX) return '$80K+';
+  return '$' + (v / 1000).toFixed(0) + 'K';
+}
+
+function updateTuitionSlider() {
+  let lo = parseInt(tuitionMinEl.value);
+  let hi = parseInt(tuitionMaxEl.value);
+  if (lo > hi) { lo = hi; tuitionMinEl.value = lo; }
+  const pLo = lo / TUITION_RANGE_MAX * 100;
+  const pHi = hi / TUITION_RANGE_MAX * 100;
+  tuitionFillEl.style.left = pLo + '%';
+  tuitionFillEl.style.width = (pHi - pLo) + '%';
+  tuitionMinLabel.textContent = fmtTuition(lo);
+  tuitionMaxLabel.textContent = fmtTuition(hi);
+  renderAll();
+}
+
+tuitionMinEl.addEventListener('input', updateTuitionSlider);
+tuitionMaxEl.addEventListener('input', () => {
+  if (parseInt(tuitionMaxEl.value) < parseInt(tuitionMinEl.value)) {
+    tuitionMaxEl.value = tuitionMinEl.value;
+  }
+  updateTuitionSlider();
+});
+
+// Init fill position without calling renderAll (not defined yet)
+tuitionFillEl.style.left = '0%';
+tuitionFillEl.style.width = '100%';
+
+let activeFilters = { type: 'all', level: new Set(), rating: new Set(), program: new Set(), preK: 'all' }; // empty Set = show all
+let searchQuery = '';
+let markerMap = {};   // name -> { marker, school }
+let allMarkers = [];  // flat list of every marker, for reliable cleanup
+let selectedName = null;
+let radiusCenter = null;  // {lat, lng} or null
+let radiusMiles = 0.5;    // currently selected radius
+let radiusCircle = null;  // Leaflet circle layer
+
+function buildPopup(s) {
+  const url = s.website ? (s.website.startsWith('http') ? s.website : 'https://' + s.website) : null;
+  const link = url ? `<a class="popup-link" href="${url}" target="_blank">Visit website ↗</a>` : '';
+  const DASH_COLORS = {1:'#c62828',2:'#e65100',3:'#f9a825',4:'#2e7d32',5:'#1565c0',0:'#bbb'};
+  const DASH_LABELS = {1:'Red',2:'Orange',3:'Yellow',4:'Green',5:'Blue',0:'No data'};
+  const r = caRatings[s.name];
+  const ratingHtml = r ? `
+    <div style="margin-top:7px;padding-top:6px;border-top:1px solid #eee">
+      <div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">CA Dashboard 2024</div>
+      <div style="display:flex;gap:6px">
+        <div style="flex:1;background:#f5f5f5;border-radius:4px;padding:4px 6px;text-align:center">
+          <div style="font-size:9px;color:#666;margin-bottom:2px">ELA</div>
+          <div style="font-size:11px;font-weight:700;color:${DASH_COLORS[r.ela_color]}">${DASH_LABELS[r.ela_color]}</div>
+          <div style="font-size:9px;color:#999">${r.ela_status ? parseFloat(r.ela_status).toFixed(1) : '—'}</div>
+        </div>
+        <div style="flex:1;background:#f5f5f5;border-radius:4px;padding:4px 6px;text-align:center">
+          <div style="font-size:9px;color:#666;margin-bottom:2px">Math</div>
+          <div style="font-size:11px;font-weight:700;color:${DASH_COLORS[r.math_color]}">${DASH_LABELS[r.math_color]}</div>
+          <div style="font-size:9px;color:#999">${r.math_status ? parseFloat(r.math_status).toFixed(1) : '—'}</div>
+        </div>
+      </div>
+      <div style="font-size:9px;color:#aaa;margin-top:4px">Distance from Standard · Blue=highest · Red=lowest</div>
+    </div>` : ((s.type==='public'||s.type==='charter') ? '<div style="font-size:10px;color:#bbb;margin-top:6px">No CA Dashboard rating available</div>' : '');
+  return `
+    <div style="min-width:190px">
+      <div class="popup-name">${s.name}</div>
+      <div class="popup-address">${s.address}</div>
+      <div class="popup-row"><span>Level:</span> ${LEVEL_LABELS[s.level] || s.level}</div>
+      <div class="popup-row"><span>Grades:</span> ${s.grades}</div>
+      ${s.programs && s.programs.length ? (() => {
+        const PROG_LABELS = {
+          'spanish-immersion': '🇪🇸 Spanish Immersion',
+          'cantonese-immersion': '🇨🇳 Cantonese Immersion',
+          'mandarin-immersion': '🇨🇳 Mandarin Immersion',
+          'korean-immersion': '🇰🇷 Korean Immersion',
+          'japanese': '🇯🇵 Japanese (FLES)',
+          'french-immersion': '🇫🇷 French Immersion',
+          'italian-immersion': '🇮🇹 Italian Immersion',
+          'german-immersion': '🇩🇪 German Immersion',
+          'arts': '🎨 Arts Focus',
+          'montessori': '🌱 Montessori',
+          'samoan': '🇼🇸 Samoan Immersion'
+        };
+        return `<div class="popup-row"><span>Programs:</span> ${s.programs.map(p => PROG_LABELS[p] || p).join(', ')}</div>`;
+      })() : ''}
+      ${s.notes ? `<div class="popup-row" style="color:#555;font-style:italic">${s.notes}</div>` : ''}
+      <div class="popup-row"><span>Type:</span> ${
+        s.type === 'charter' ? 'Charter (public)' :
+        s.type === 'independent' ? 'Private – Independent' :
+        s.type === 'parochial' ? `Private – Parochial${s.notes ? ' (' + s.notes + ')' : ''}` :
+        'Public (SFUSD)'
+      }</div>
+      ${(() => {
+        const tier = schoolHours[s.name];
+        if (!tier) return '';
+        const sched = BELL_SCHEDULES[tier];
+        return `<div class="popup-row"><span>Hours:</span> <span>${sched.h} · <span style="color:#777">Wed: ${sched.wed}</span></span></div>`;
+      })()}
+      ${(() => {
+        const ms = msFeeder[s.name];
+        if (!ms) return '';
+        return `<div class="popup-row"><span>Feeder MS:</span> <span style="color:#e65100;font-weight:600">${ms}</span></div>`;
+      })()}
+      ${s.prek && s.type === 'public' ? (() => {
+        const isTB = s.tuitionBased === true;
+        const enrollLabel = isTB
+          ? '<span style="color:#1a73e8;font-weight:600">Tuition-based</span> (open to all incomes)'
+          : '<span style="color:#2e7d32;font-weight:600">Income-restricted</span> (subsidized / free)';
+        const hrs = preKHours[s.name];
+        const hrsHtml = hrs
+          ? `<div class="popup-row"><span>Pre-K hours:</span> <span>${hrs.h}${hrs.wed ? ` · <span style="color:#777">Wed: ${hrs.wed}</span>` : ''}</span></div>`
+          : '';
+        return `<div class="popup-row"><span>Pre-K enrollment:</span> ${enrollLabel}</div>${hrsHtml}`;
+      })() : ''}
+      ${(s.type === 'independent' || s.type === 'parochial') ? (() => {
+        const t = tuition[s.name];
+        if (t != null) return `<div style="margin-top:7px;padding-top:6px;border-top:1px solid #eee"><div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Tuition (2025)</div><div style="font-size:14px;font-weight:700;color:#1a73e8">$${t.toLocaleString()}/yr</div><div style="font-size:9px;color:#aaa;margin-top:2px">Source: SF Chronicle · maximum cost</div></div>`;
+        return '<div style="font-size:10px;color:#bbb;margin-top:6px">Tuition not available</div>';
+      })() : ''}
+      ${s.type === 'parochial' ? (() => {
+        const ex = catholicExtras[s.name];
+        if (!ex) return '';
+        const rows = [];
+        if (ex.lang) rows.push(`<div style="margin-bottom:3px"><span style="font-size:10px;color:#555;font-weight:600">Language:</span> <span style="font-size:10px;color:#333">${ex.lang}</span>${ex.langStart ? `<span style="font-size:9px;color:#888"> · starts ${ex.langStart}</span>` : ''}</div>`);
+        if (ex.enrichment) rows.push(`<div style="margin-bottom:3px"><span style="font-size:10px;color:#555;font-weight:600">Enrichment:</span> <span style="font-size:10px;color:#333">${ex.enrichment}</span></div>`);
+        if (ex.afterSchool) rows.push(`<div style="margin-bottom:3px"><span style="font-size:10px;color:#555;font-weight:600">Before/After School:</span> <span style="font-size:10px;color:#333">${ex.afterSchool}</span></div>`);
+        if (!rows.length) return '';
+        return `<div style="margin-top:7px;padding-top:6px;border-top:1px solid #eee">
+          <div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:5px">Programs &amp; Enrichment</div>
+          ${rows.join('')}
+          <div style="font-size:9px;color:#aaa;margin-top:3px">Source: SF Catholic Schools.xlsx</div>
+        </div>`;
+      })() : ''}
+      ${ratingHtml}
+      ${(() => {
+        const tk = tkFeeders[s.name];
+        const areaTag = a => a === 'citywide' ? 'citywide priority' : `${a} attendance area priority`;
+        const typeSpan = t => t === 'Spanish Immersion'
+          ? `<span style="color:#c0392b">Spanish Immersion</span>` : 'GE';
+        let rows = [];
+        if (tk && tk.feedsTo) {
+          // This is an EES/TK site feeding other elementary schools
+          rows.push(`<div style="font-size:10px;color:#555">TK pathway → K at:</div>`);
+          tk.feedsTo.forEach(t => {
+            rows.push(`<div style="font-size:10px;color:#555;padding-left:10px">· ${t.name} · ${typeSpan(t.type)} · ${areaTag(t.area)}</div>`);
+          });
+        } else {
+          // On-site TK at this school
+          if (tk && tk.onsite) {
+            rows.push(`<div style="font-size:10px;color:#555">TK on-site (${typeSpan(tk.onsite)} · ${areaTag(tk.area)}) → K here</div>`);
+          }
+          // Find any external EES feeders into this school
+          Object.entries(tkFeeders).forEach(([srcName, info]) => {
+            if (!info.feedsTo) return;
+            const match = info.feedsTo.find(t => t.name === s.name);
+            if (!match) return;
+            rows.push(`<div style="font-size:10px;color:#555">TK feeder: ${srcName} (${typeSpan(match.type)} · ${areaTag(match.area)}) → K here</div>`);
+          });
+        }
+        if (!rows.length) return '';
+        return `<div style="margin-top:7px;padding-top:6px;border-top:1px solid #eee">
+          <div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">SFUSD TK Feeder (2026-27)</div>
+          ${rows.join('')}
+          <div style="font-size:9px;color:#aaa;margin-top:3px">Source: sfusd.edu/TKFeeder</div>
+        </div>`;
+      })()}
+      ${(() => {
+        const cbos = cboPrograms[s.name];
+        if (!cbos || !cbos.length) return '';
+        return `<div style="margin-top:7px;padding-top:6px;border-top:1px solid #eee">
+          <div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">After-School / OST Programs</div>
+          ${cbos.map(c => `
+            <div style="margin-bottom:5px">
+              <div style="font-size:11px;font-weight:600;color:#333">${c.url ? `<a href="${c.url}" target="_blank" style="color:#1565c0;text-decoration:none">${c.name}</a>` : c.name}</div>
+              ${c.hours ? `<div style="font-size:10px;color:#666;margin-top:1px">⏱ ${c.hours}</div>` : ''}
+              <div style="font-size:10px;color:#555;margin-top:1px">${c.desc}</div>
+            </div>`).join('')}
+          <div style="font-size:9px;color:#aaa;margin-top:3px">Source: SFUSD ExCEL CBO Partner Programs</div>
+        </div>`;
+      })()}
+      ${(() => {
+        if (s.type !== 'public' && s.type !== 'charter') return '';
+        const d = sfusdK[s.name];
+        if (!d || (!d.ge && !d.immersion)) return '';
+        const pct = v => v != null ? Math.round(v*100)+'%' : '—';
+        const seg = (label, x, indent) => x && x.req > 0 ? `
+          <tr><td style="color:${indent?'#777':'#555'};padding:2px 6px 2px ${indent?'10px':'0'};font-size:${indent?'9px':'10px'};white-space:nowrap">${label}</td>
+              <td style="padding:2px 4px;font-size:10px;text-align:right">${Math.round(x.req)}</td>
+              <td style="padding:2px 4px;font-size:10px;text-align:right">${Math.round(x.asgn)}</td>
+              <td style="padding:2px 4px;font-size:10px;text-align:right">${pct(x.pct)}</td>
+              <td style="padding:2px 4px;font-size:10px;text-align:right">${pct(x.succ)}</td></tr>` : '';
+        const progBlock = (progLabel, p) => !p ? '' : `
+          <tr><td colspan="5" style="padding:4px 0 1px;font-size:9px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.3px">${progLabel}</td></tr>
+          ${seg('All applicants', p.all, true)}
+          ${seg('Attend. area', p.esaa, true)}
+          ${seg('No tiebreaker', p.notb, true)}
+          ${seg('CTIP1', p.ctip1, true)}`;
+        const hasImm = d.immersion && d.immersion.all && d.immersion.all.req > 0;
+        const hasGE = d.ge && d.ge.all && d.ge.all.req > 0;
+        return `<div style="margin-top:7px;padding-top:6px;border-top:1px solid #eee">
+          <div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:5px">SFUSD Kindergarten Lottery (3-yr avg)</div>
+          <table style="border-collapse:collapse;width:100%">
+            <thead><tr style="border-bottom:1px solid #eee">
+              <th style="font-size:9px;color:#aaa;font-weight:500;text-align:left;padding-bottom:3px"></th>
+              <th style="font-size:9px;color:#aaa;font-weight:500;text-align:right;padding-bottom:3px">Req</th>
+              <th style="font-size:9px;color:#aaa;font-weight:500;text-align:right;padding-bottom:3px">Asgn</th>
+              <th style="font-size:9px;color:#aaa;font-weight:500;text-align:right;padding-bottom:3px">% Asgn</th>
+              <th style="font-size:9px;color:#aaa;font-weight:500;text-align:right;padding-bottom:3px">% Success</th>
+            </tr></thead>
+            <tbody>
+              ${(hasGE && hasImm) ? progBlock('General Ed', d.ge) + progBlock(d.immLabel, d.immersion) :
+                hasImm ? progBlock(d.immLabel || 'Immersion', d.immersion) :
+                progBlock('General Ed', d.ge)}
+            </tbody>
+          </table>
+          <div style="font-size:9px;color:#aaa;margin-top:3px">Source: SFUSD Main Round 2023–26 · % Success = got this or higher-ranked choice</div>
+        </div>`;
+      })()}
+      ${link}
+    </div>`;
+}
+
+function filtered() {
+  return allSchools.filter(s => {
+    const t = activeFilters.type;
+    if (t !== 'all') {
+      if (t === 'private' && s.type !== 'independent' && s.type !== 'parochial') return false;
+      if (t !== 'private' && s.type !== t) return false;
+    }
+    if (activeFilters.level.size > 0) {
+      const matchesLevel = activeFilters.level.has(s.level) ||
+        (activeFilters.level.has('elementary') && s.level === 'k8');
+      const matchesPrek = activeFilters.level.has('preschool') && s.prek;
+      if (!matchesLevel && !matchesPrek) return false;
+    }
+    if (activeFilters.rating.size > 0) {
+      // Rating filter only applies to public/charter; private schools always pass
+      if (s.type === 'public' || s.type === 'charter') {
+        const r = caRatings[s.name];
+        if (!r) return false; // hide unrated public schools when a rating is selected
+        const match = activeFilters.rating.has(String(r.ela_color)) ||
+                      activeFilters.rating.has(String(r.math_color));
+        if (!match) return false;
+      }
+    }
+    // Pre-K enrollment type filter — only applies to standalone preschool entries
+    // Elementary/K-8 schools that also offer prek always remain visible
+    if (activeFilters.preK !== 'all' && s.level === 'preschool') {
+      if (activeFilters.preK === 'tuition' && s.tuitionBased !== true) return false;
+      if (activeFilters.preK === 'free' && s.tuitionBased !== false) return false;
+    }
+    // Program filter — show only schools with a matching program tag
+    if (activeFilters.program.size > 0) {
+      const progs = s.programs || [];
+      if (!progs.some(p => activeFilters.program.has(p))) return false;
+    }
+    // Radius filter
+    if (radiusCenter && s.lat && s.lng) {
+      if (haversineDistance(radiusCenter.lat, radiusCenter.lng, s.lat, s.lng) > radiusMiles) return false;
+    }
+    // Tuition slider — only applies to private schools with known tuition
+    if (s.type === 'independent' || s.type === 'parochial') {
+      const lo = parseInt(tuitionMinEl.value);
+      const hi = parseInt(tuitionMaxEl.value);
+      if (lo > 0 || hi < TUITION_RANGE_MAX) {
+        const t = tuition[s.name];
+        if (t != null && (t < lo || t > hi)) return false;
+      }
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!s.name.toLowerCase().includes(q) && !s.address.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderAll() {
+  // Remove all markers using the flat list so duplicates aren't orphaned
+  allMarkers.forEach(m => map.removeLayer(m));
+  allMarkers = [];
+  markerMap = {};
+
+  const list = filtered();
+  list.forEach(s => {
+    if (!s.lat || !s.lng) return;
+    const marker = L.marker([s.lat, s.lng], { icon: makeIcon(s) })
+      .bindPopup(buildPopup(s))
+      .addTo(map);
+    marker.on('click', () => selectSchool(s.name));
+    allMarkers.push(marker);
+    markerMap[s.name] = { marker, school: s };
+  });
+
+  renderList(list);
+  document.getElementById('count-bar').textContent =
+    `Showing ${list.length} of ${allSchools.length} schools`;
+}
+
+function renderList(list) {
+  const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name));
+  const el = document.getElementById('school-list');
+  if (!sorted.length) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">No schools match</div>';
+    return;
+  }
+  el.innerHTML = sorted.map(s => {
+    const color = COLORS[s.level] || COLORS.other;
+    const sel = s.name === selectedName ? ' selected' : '';
+    return `<div class="school-item${sel}" data-name="${s.name.replace(/"/g,'&quot;')}" onclick="selectSchool(this.dataset.name)">
+      <div class="school-name"><span class="dot" style="background:${color}"></span>${s.name}</div>
+      <div class="school-meta">${LEVEL_LABELS[s.level] || s.level} · Grades ${s.grades} · ${
+        s.type === 'charter' ? 'Charter' :
+        s.type === 'independent' ? 'Private – Independent' :
+        s.type === 'parochial' ? 'Private – Parochial' :
+        'Public'
+      }</div>
+    </div>`;
+  }).join('');
+}
+
+function selectSchool(name) {
+  selectedName = name;
+  const entry = markerMap[name];
+  if (entry) {
+    map.setView([entry.school.lat, entry.school.lng], 15);
+    entry.marker.openPopup();
+  }
+  document.querySelectorAll('.school-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.name === name);
+  });
+  // Scroll to item
+  const item = document.querySelector(`.school-item[data-name="${name}"]`);
+  if (item) item.scrollIntoView({ block: 'nearest' });
+}
+
+// Filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const f = btn.dataset.filter;
+    const v = btn.dataset.value;
+    if (f === 'type') {
+      // Single-select for type
+      activeFilters.type = v;
+      document.querySelectorAll('.filter-btn[data-filter="type"]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    } else if (f === 'rating') {
+      // Multi-select for rating
+      if (v === 'all') {
+        activeFilters.rating.clear();
+        document.querySelectorAll('.filter-btn[data-filter="rating"]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      } else {
+        if (activeFilters.rating.has(v)) {
+          activeFilters.rating.delete(v);
+          btn.classList.remove('active');
+        } else {
+          activeFilters.rating.add(v);
+          btn.classList.add('active');
+        }
+        const allBtn = document.querySelector('.filter-btn[data-filter="rating"][data-value="all"]');
+        if (activeFilters.rating.size > 0) {
+          allBtn.classList.remove('active');
+        } else {
+          allBtn.classList.add('active');
+        }
+      }
+    } else if (f === 'level') {
+      // Multi-select for level
+      if (v === 'all') {
+        activeFilters.level.clear();
+        document.querySelectorAll('.filter-btn[data-filter="level"]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      } else {
+        // Toggle this level
+        if (activeFilters.level.has(v)) {
+          activeFilters.level.delete(v);
+          btn.classList.remove('active');
+        } else {
+          activeFilters.level.add(v);
+          btn.classList.add('active');
+        }
+        // Deactivate "All" when specific levels are selected
+        const allBtn = document.querySelector('.filter-btn[data-filter="level"][data-value="all"]');
+        if (activeFilters.level.size > 0) {
+          allBtn.classList.remove('active');
+        } else {
+          // Nothing selected = same as All
+          allBtn.classList.add('active');
+        }
+      }
+    } else if (f === 'prek') {
+      // Single-select for prek enrollment type
+      activeFilters.preK = v;
+      document.querySelectorAll('.filter-btn[data-filter="prek"]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    } else if (f === 'program') {
+      // Multi-select for program
+      if (v === 'all') {
+        activeFilters.program.clear();
+        document.querySelectorAll('.filter-btn[data-filter="program"]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      } else {
+        if (activeFilters.program.has(v)) {
+          activeFilters.program.delete(v);
+          btn.classList.remove('active');
+        } else {
+          activeFilters.program.add(v);
+          btn.classList.add('active');
+        }
+        const allBtn = document.querySelector('.filter-btn[data-filter="program"][data-value="all"]');
+        if (activeFilters.program.size > 0) {
+          allBtn.classList.remove('active');
+        } else {
+          allBtn.classList.add('active');
+        }
+      }
+    }
+    renderAll();
+  });
+});
+
+// Near Me
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 3958.8;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng/2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function geocodeAddress(address) {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=us`;
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  const data = await res.json();
+  if (!data.length) return null;
+  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), display: data[0].display_name };
+}
+
+function applyRadius(lat, lng, miles) {
+  radiusCenter = { lat, lng };
+  radiusMiles = miles;
+  if (radiusCircle) map.removeLayer(radiusCircle);
+  radiusCircle = L.circle([lat, lng], {
+    radius: miles * 1609.344,
+    color: '#1a73e8', fillColor: '#1a73e8', fillOpacity: 0.07, weight: 2
+  }).addTo(map);
+  map.fitBounds(radiusCircle.getBounds());
+  document.getElementById('radius-clear').style.display = '';
+  renderAll();
+}
+
+function clearRadius() {
+  radiusCenter = null;
+  if (radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
+  document.getElementById('radius-clear').style.display = 'none';
+  document.getElementById('radius-status').textContent = '';
+  document.getElementById('radius-address').value = '';
+  renderAll();
+}
+
+const radiusGoBtn = document.getElementById('radius-go');
+const radiusAddressEl = document.getElementById('radius-address');
+const radiusStatusEl = document.getElementById('radius-status');
+
+async function runGeocode() {
+  const address = radiusAddressEl.value.trim();
+  if (!address) return;
+  radiusGoBtn.disabled = true;
+  radiusGoBtn.textContent = '…';
+  radiusStatusEl.textContent = 'Searching…';
+  try {
+    const result = await geocodeAddress(address);
+    if (!result) {
+      radiusStatusEl.textContent = 'Address not found. Try adding "San Francisco, CA".';
+    } else {
+      const short = result.display.split(',').slice(0, 2).join(',');
+      radiusStatusEl.textContent = `📍 ${short}`;
+      applyRadius(result.lat, result.lng, radiusMiles);
+    }
+  } catch (e) {
+    radiusStatusEl.textContent = 'Geocoding failed. Check your connection.';
+  }
+  radiusGoBtn.disabled = false;
+  radiusGoBtn.textContent = 'Go';
+}
+
+radiusGoBtn.addEventListener('click', runGeocode);
+radiusAddressEl.addEventListener('keydown', e => { if (e.key === 'Enter') runGeocode(); });
+
+document.querySelectorAll('.radius-btn[data-miles]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.radius-btn[data-miles]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    radiusMiles = parseFloat(btn.dataset.miles);
+    if (radiusCenter) applyRadius(radiusCenter.lat, radiusCenter.lng, radiusMiles);
+  });
+});
+
+document.getElementById('radius-clear').addEventListener('click', clearRadius);
+
+// Search
+const searchEl = document.getElementById('search');
+const searchClearEl = document.getElementById('search-clear');
+let searchTimer;
+searchEl.addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  searchClearEl.style.display = e.target.value ? 'block' : 'none';
+  searchTimer = setTimeout(() => { searchQuery = e.target.value; renderAll(); }, 200);
+});
+searchClearEl.addEventListener('click', () => {
+  searchEl.value = '';
+  searchClearEl.style.display = 'none';
+  searchQuery = '';
+  renderAll();
+  searchEl.focus();
+});
+
+renderAll();
+
+// ── Attendance Area Boundaries ───────────────────────────────────────────────
+let boundaryLayer = null;
+let boundaryLoaded = false;
+let boundaryVisible = false;
+
+const BOUNDARY_URL = 'https://data.sfgov.org/resource/e6tr-sxwg.geojson?$limit=200';
+
+function boundaryColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 55%, 50%)`;
+}
+
+async function loadBoundaries() {
+  const btn = document.getElementById('toggle-boundaries');
+  btn.textContent = 'Loading…';
+  btn.disabled = true;
+  try {
+    const res = await fetch(BOUNDARY_URL);
+    const geojson = await res.json();
+    boundaryLayer = L.geoJSON(geojson, {
+      style: feature => ({
+        color: boundaryColor(feature.properties.aaname || ''),
+        weight: 2,
+        opacity: 0.9,
+        fillColor: boundaryColor(feature.properties.aaname || ''),
+        fillOpacity: 0.08
+      }),
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties;
+        const name = p.aaname || 'Unknown';
+        layer.bindTooltip(name, { sticky: true, className: 'boundary-tooltip' });
+        layer.on('mouseover', function() { this.setStyle({ fillOpacity: 0.28, weight: 3 }); });
+        layer.on('mouseout',  function() { this.setStyle({ fillOpacity: 0.08, weight: 2 }); });
+      }
+    });
+    boundaryLoaded = true;
+  } catch (e) {
+    btn.textContent = 'Load failed — retry';
+    btn.disabled = false;
+    return;
+  }
+  btn.disabled = false;
+  showBoundaries();
+}
+
+function showBoundaries() {
+  boundaryLayer.addTo(map);
+  boundaryLayer.bringToBack();
+  boundaryVisible = true;
+  const btn = document.getElementById('toggle-boundaries');
+  btn.textContent = 'Hide Attendance Areas';
+  btn.classList.add('on');
+}
+
+function hideBoundaries() {
+  map.removeLayer(boundaryLayer);
+  boundaryVisible = false;
+  const btn = document.getElementById('toggle-boundaries');
+  btn.textContent = 'Show Attendance Areas';
+  btn.classList.remove('on');
+}
+
+function toggleBoundaries() {
+  if (!boundaryLoaded) { loadBoundaries(); }
+  else if (boundaryVisible) { hideBoundaries(); }
+  else { showBoundaries(); }
+}
+
+// ── TK/K Feeder Arrows ───────────────────────────────────────────────────────
+let feederLayer = null;
+let feedersVisible = false;
+
+// Returns a lat/lng that is `radiusPx` pixels away from `dst` toward `src` (at current zoom)
+function offsetTowardSrc(src, dst, radiusPx) {
+  const srcPx = map.latLngToLayerPoint(L.latLng(src.lat, src.lng));
+  const dstPx = map.latLngToLayerPoint(L.latLng(dst.lat, dst.lng));
+  const dx = srcPx.x - dstPx.x;
+  const dy = srcPx.y - dstPx.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist <= radiusPx) return L.latLng(dst.lat, dst.lng);
+  const scale = radiusPx / dist;
+  return map.layerPointToLatLng(L.point(dstPx.x + dx * scale, dstPx.y + dy * scale));
+}
+
+function buildFeederArrows() {
+  // Build name → {lat,lng} lookup from allSchools
+  const coordMap = {};
+  allSchools.forEach(s => { coordMap[s.name] = {lat: s.lat, lng: s.lng}; });
+
+  const lines = [];
+
+  // Collect EES → elementary pairs from tkFeeders
+  const seen = new Set();
+
+  Object.entries(tkFeeders).forEach(([schoolName, info]) => {
+    if (!info.feedsTo) return;
+    const src = coordMap[schoolName];
+    if (!src) return;
+    info.feedsTo.forEach(target => {
+      const dst = coordMap[target.name];
+      if (!dst) return;
+      const key = `${schoolName}→${target.name}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      lines.push({ src, dst, srcName: schoolName, dstName: target.name, type: target.type || 'GE' });
+    });
+  });
+
+  const group = L.layerGroup();
+
+  lines.forEach(({ src, dst, srcName, dstName, type }) => {
+    const isSpanish = type && type.toLowerCase().includes('spanish');
+    const color = isSpanish ? '#c0392b' : '#6a1b9a';
+
+    // bearing: atan2(Δlng, Δlat) gives clockwise-from-north angle, matching SVG rotate from top
+    const angle = Math.atan2(dst.lng - src.lng, dst.lat - src.lat) * 180 / Math.PI;
+
+    // Offset arrowhead 13px from circle center toward src.
+    // Arrow tip is 5px from icon center, so tip lands at 13-5=8px from dst = circle edge.
+    const arrowLatLng = offsetTowardSrc(src, dst, 13);
+
+    const arrowIcon = L.divIcon({
+      className: '',
+      html: `<svg width="14" height="14" viewBox="-7 -7 14 14" style="transform:rotate(${angle}deg);overflow:visible">
+        <polygon points="0,-5 5,5 -5,5" fill="${color}" opacity="0.9"/>
+      </svg>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    });
+    const arrow = L.marker(arrowLatLng, { icon: arrowIcon, interactive: false });
+
+    // Polyline ends at arrowhead position (not at circle center)
+    const line = L.polyline([[src.lat, src.lng], [arrowLatLng.lat, arrowLatLng.lng]], {
+      color,
+      weight: 2.5,
+      opacity: 0.85,
+      dashArray: '6 4'
+    });
+
+    const tipLabel = isSpanish ? 'Spanish Immersion TK→K' : 'GE TK→K';
+    const tooltip = `<b>${srcName}</b> → <b>${dstName}</b><br><span style="color:${color}">${tipLabel}</span>`;
+    line.bindTooltip(tooltip, { sticky: true });
+
+    group.addLayer(line);
+    group.addLayer(arrow);
+  });
+
+  // Self-loop indicators for schools with on-site TK → K at the same school
+  Object.entries(tkFeeders).forEach(([schoolName, info]) => {
+    if (!info.onsite) return;
+    const coord = coordMap[schoolName];
+    if (!coord) return;
+    const isSpanish = info.onsite.toLowerCase().includes('spanish');
+    const color = isSpanish ? '#c0392b' : '#6a1b9a';
+    const loopIcon = L.divIcon({
+      className: '',
+      html: `<div style="font-size:15px;color:${color};line-height:1;text-shadow:0 0 2px white,0 0 2px white,0 0 2px white">↺</div>`,
+      iconSize: [15, 15],
+      iconAnchor: [7, 12]
+    });
+    const loopMarker = L.marker([coord.lat, coord.lng], { icon: loopIcon, interactive: true, zIndexOffset: 600 });
+    loopMarker.bindTooltip(
+      `<b>${schoolName}</b><br><span style="color:${color}">TK on-site (${info.onsite}) → K here · ${info.area === 'citywide' ? 'citywide priority' : (info.area || '') + ' attendance area'}</span>`,
+      { sticky: true }
+    );
+    group.addLayer(loopMarker);
+  });
+
+  return group;
+}
+
+function showFeeders() {
+  if (!feederLayer) feederLayer = buildFeederArrows();
+  feederLayer.addTo(map);
+  feedersVisible = true;
+  const btn = document.getElementById('toggle-feeders');
+  btn.textContent = 'Hide Feeder Arrows';
+  btn.classList.add('on');
+}
+
+function hideFeeders() {
+  if (feederLayer) map.removeLayer(feederLayer);
+  feedersVisible = false;
+  const btn = document.getElementById('toggle-feeders');
+  btn.textContent = 'Show Feeder Arrows';
+  btn.classList.remove('on');
+}
+
+function toggleFeeders() {
+  if (feedersVisible) { hideFeeders(); }
+  else { showFeeders(); }
+}
+
+let msFeedersLayer = null;
+let msFeedersVisible = false;
+
+function buildMSFeederArrows() {
+  const coordMap = {};
+  allSchools.forEach(s => { coordMap[s.name] = {lat: s.lat, lng: s.lng}; });
+
+  const group = L.layerGroup();
+  const color = '#e65100'; // orange = middle school color
+
+  Object.entries(msFeeder).forEach(([esName, msName]) => {
+    const src = coordMap[esName];
+    const dst = coordMap[msName];
+    if (!src || !dst) return;
+
+    const angle = Math.atan2(dst.lng - src.lng, dst.lat - src.lat) * 180 / Math.PI;
+    const arrowLatLng = offsetTowardSrc(src, dst, 13);
+
+    const arrowIcon = L.divIcon({
+      className: '',
+      html: `<svg width="14" height="14" viewBox="-7 -7 14 14" style="transform:rotate(${angle}deg);overflow:visible">
+        <polygon points="0,-5 5,5 -5,5" fill="${color}" opacity="0.9"/>
+      </svg>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    });
+    const arrow = L.marker(arrowLatLng, { icon: arrowIcon, interactive: false });
+
+    const line = L.polyline([[src.lat, src.lng], [arrowLatLng.lat, arrowLatLng.lng]], {
+      color,
+      weight: 2,
+      opacity: 0.75,
+      dashArray: '5 4'
+    });
+    line.bindTooltip(`<b>${esName}</b> → <b>${msName}</b><br><span style="color:${color}">Elementary → Middle School feeder</span>`, { sticky: true });
+
+    group.addLayer(line);
+    group.addLayer(arrow);
+  });
+
+  return group;
+}
+
+function showMSFeeders() {
+  if (!msFeedersLayer) msFeedersLayer = buildMSFeederArrows();
+  msFeedersLayer.addTo(map);
+  msFeedersVisible = true;
+  const btn = document.getElementById('toggle-ms-feeders');
+  btn.textContent = 'Hide ES→MS Arrows';
+  btn.classList.add('on');
+}
+
+function hideMSFeeders() {
+  if (msFeedersLayer) map.removeLayer(msFeedersLayer);
+  msFeedersVisible = false;
+  const btn = document.getElementById('toggle-ms-feeders');
+  btn.textContent = 'Show ES→MS Arrows';
+  btn.classList.remove('on');
+}
+
+function toggleMSFeeders() {
+  if (msFeedersVisible) { hideMSFeeders(); }
+  else { showMSFeeders(); }
+}
+
+// Rebuild feeder arrows on zoom so pixel offsets stay accurate
+map.on('zoomend', () => {
+  if (feedersVisible) {
+    map.removeLayer(feederLayer);
+    feederLayer = buildFeederArrows();
+    feederLayer.addTo(map);
+  }
+  if (msFeedersVisible) {
+    map.removeLayer(msFeedersLayer);
+    msFeedersLayer = buildMSFeederArrows();
+    msFeedersLayer.addTo(map);
+  }
+});
+</script>
+</body>
+</html>
