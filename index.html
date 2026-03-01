@@ -3837,7 +3837,7 @@ function renderAll() {
   list.forEach(s => {
     if (!s.lat || !s.lng) return;
     const marker = L.marker([s.lat, s.lng], { icon: makeIcon(s) })
-      .bindPopup(buildPopup(s))
+      .bindPopup(buildPopup(s), { maxWidth: 300, maxHeight: 380, autoPanPaddingTopLeft: L.point(10, 80), autoPanPaddingBottomRight: L.point(10, 20) })
       .addTo(map);
     marker.on('click', () => selectSchool(s.name));
     allMarkers.push(marker);
@@ -3875,8 +3875,9 @@ function selectSchool(name) {
   selectedName = name;
   const entry = markerMap[name];
   if (entry) {
-    map.setView([entry.school.lat, entry.school.lng], 15);
-    entry.marker.openPopup();
+    const targetZoom = Math.max(map.getZoom(), 14);
+    map.once('moveend', () => entry.marker.openPopup());
+    map.setView([entry.school.lat, entry.school.lng], targetZoom);
   }
   document.querySelectorAll('.school-item').forEach(el => {
     el.classList.toggle('selected', el.dataset.name === name);
