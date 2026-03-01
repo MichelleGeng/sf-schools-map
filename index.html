@@ -123,15 +123,16 @@
 
     /* Mobile layout */
     @media (max-width: 640px) {
-      body { flex-direction: column; }
+      body { display: block; }
       #sidebar {
+        display: none;
         position: fixed; top: 0; left: 0; bottom: 0; width: 88vw; max-width: 340px;
-        z-index: 1600; transform: translateX(-100%); transition: transform 0.25s ease;
-        min-width: unset; border-right: none; box-shadow: 3px 0 16px rgba(0,0,0,0.25);
+        z-index: 1600; min-width: unset; border-right: none;
+        box-shadow: 4px 0 20px rgba(0,0,0,0.3);
       }
-      #sidebar.open { transform: translateX(0); }
+      #sidebar.open { display: flex; }
       #sidebar-overlay.open { display: block; }
-      #map { flex: 1; height: 100vh; }
+      #map { width: 100%; height: 100vh; }
       #mobile-toggle { display: block; }
       #legend { bottom: 70px; right: 8px; font-size: 10px; padding: 7px 10px; }
     }
@@ -4312,8 +4313,8 @@ map.on('zoomend', () => {
 const mobileToggle = document.getElementById('mobile-toggle');
 const sidebarEl = document.getElementById('sidebar');
 const overlayEl = document.getElementById('sidebar-overlay');
-function openSidebar() { sidebarEl.classList.add('open'); overlayEl.classList.add('open'); mobileToggle.textContent = '✕ Close'; }
-function closeSidebar() { sidebarEl.classList.remove('open'); overlayEl.classList.remove('open'); mobileToggle.textContent = '☰ Filters'; }
+function openSidebar() { sidebarEl.classList.add('open'); overlayEl.classList.add('open'); mobileToggle.textContent = '✕ Close'; mobileToggle.style.background = '#555'; }
+function closeSidebar() { sidebarEl.classList.remove('open'); overlayEl.classList.remove('open'); mobileToggle.textContent = '☰ Filters'; mobileToggle.style.background = '#1a73e8'; }
 mobileToggle.addEventListener('click', () => sidebarEl.classList.contains('open') ? closeSidebar() : openSidebar());
 overlayEl.addEventListener('click', closeSidebar);
 </script>
