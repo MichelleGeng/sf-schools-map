@@ -230,6 +230,17 @@
         <button class="filter-btn" data-filter="program" data-value="montessori">Montessori</button>
       </div>
     </div>
+    <div class="filter-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+      <div class="filter-label" style="width:auto">Before/After School Programs</div>
+      <div class="filter-buttons">
+        <button class="filter-btn active" data-filter="ost" data-value="all">All</button>
+        <button class="filter-btn" data-filter="ost" data-value="academic">Academic</button>
+        <button class="filter-btn" data-filter="ost" data-value="mandarin">Mandarin</button>
+        <button class="filter-btn" data-filter="ost" data-value="spanish">Spanish</button>
+        <button class="filter-btn" data-filter="ost" data-value="arts">Arts</button>
+        <button class="filter-btn" data-filter="ost" data-value="childcare">Childcare</button>
+      </div>
+    </div>
     <div class="filter-row">
       <div class="filter-label">Layers</div>
       <div class="filter-buttons">
@@ -3551,7 +3562,7 @@ tuitionMaxEl.addEventListener('input', () => {
 tuitionFillEl.style.left = '0%';
 tuitionFillEl.style.width = '100%';
 
-let activeFilters = { type: 'all', level: new Set(), rating: new Set(), program: new Set(), preK: 'all' }; // empty Set = show all
+let activeFilters = { type: 'all', level: new Set(), rating: new Set(), program: new Set(), preK: 'all', ost: new Set() }; // empty Set = show all
 let searchQuery = '';
 let markerMap = {};   // name -> { marker, school }
 let allMarkers = [];  // flat list of every marker, for reliable cleanup
@@ -3742,6 +3753,18 @@ function buildPopup(s) {
     </div>`;
 }
 
+function getCBOTags(c) {
+  const n = c.name.toLowerCase();
+  const d = (c.desc || '').toLowerCase();
+  const tags = new Set();
+  if (n.includes('mandarin') || n.includes('chinese') || d.includes('mandarin') || d.includes('cantonese')) tags.add('mandarin');
+  if (n.includes('spanish') || d.includes('spanish')) tags.add('spanish');
+  if (n.includes('childcare') || d.includes('licensed childcare')) { tags.add('childcare'); return tags; }
+  if (n.includes('arts') || d.includes(' arts') || d.includes('arts-') || d.includes('performing arts')) tags.add('arts');
+  if (d.includes('academic') || d.includes('homework') || n.includes('enrichment') || d.includes('enrichment') || d.includes('support') || d.includes('recreation') || d.includes('youth development')) tags.add('academic');
+  return tags;
+}
+
 function filtered() {
   return allSchools.filter(s => {
     const t = activeFilters.type;
@@ -3775,6 +3798,13 @@ function filtered() {
     if (activeFilters.program.size > 0) {
       const progs = s.programs || [];
       if (!progs.some(p => activeFilters.program.has(p))) return false;
+    }
+    // Before/After School Programs filter
+    if (activeFilters.ost.size > 0) {
+      const cbos = cboPrograms[s.name];
+      if (!cbos || !cbos.length) return false;
+      const schoolTags = new Set(cbos.flatMap(c => [...getCBOTags(c)]));
+      if (![...activeFilters.ost].some(t => schoolTags.has(t))) return false;
     }
     // Radius filter
     if (radiusCenter && s.lat && s.lng) {
@@ -3932,6 +3962,26 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
         }
         const allBtn = document.querySelector('.filter-btn[data-filter="program"][data-value="all"]');
         if (activeFilters.program.size > 0) {
+          allBtn.classList.remove('active');
+        } else {
+          allBtn.classList.add('active');
+        }
+      }
+    } else if (f === 'ost') {
+      if (v === 'all') {
+        activeFilters.ost.clear();
+        document.querySelectorAll('.filter-btn[data-filter="ost"]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      } else {
+        if (activeFilters.ost.has(v)) {
+          activeFilters.ost.delete(v);
+          btn.classList.remove('active');
+        } else {
+          activeFilters.ost.add(v);
+          btn.classList.add('active');
+        }
+        const allBtn = document.querySelector('.filter-btn[data-filter="ost"][data-value="all"]');
+        if (activeFilters.ost.size > 0) {
           allBtn.classList.remove('active');
         } else {
           allBtn.classList.add('active');
