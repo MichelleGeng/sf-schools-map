@@ -3801,9 +3801,8 @@ function filtered() {
         if (!match) return false;
       }
     }
-    // Pre-K enrollment type filter — only applies to standalone preschool entries
-    // Elementary/K-8 schools that also offer prek always remain visible
-    if (activeFilters.preK !== 'all' && s.level === 'preschool') {
+    // Pre-K enrollment type filter — applies to any school with prek:true
+    if (activeFilters.preK !== 'all' && s.prek) {
       if (activeFilters.preK === 'tuition' && s.tuitionBased !== true) return false;
       if (activeFilters.preK === 'free' && s.tuitionBased !== false) return false;
     }
